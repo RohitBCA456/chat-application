@@ -1,0 +1,89 @@
+<!-- register.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register</title>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: linear-gradient(to right, #232526, #414345);
+      font-family: sans-serif;
+      color: white;
+      margin: 0;
+    }
+
+    .register-box {
+      background: #2c2c34;
+      padding: 30px 40px;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+      width: 100%;
+      max-width: 350px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    input, button {
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 1rem;
+      border: none;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    input {
+      background: #fff;
+      color: #333;
+    }
+
+    button {
+      background-color: #6c63ff;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #554fd6;
+    }
+
+    .login-link {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.95rem;
+    }
+
+    .login-link a {
+      color: #6c63ff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .login-link a:hover {
+      text-decoration: underline;
+      color: #8a82ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="register-box">
+    <h2>Register to Enter Chat</h2>
+    <div class="form-group">
+      <input type="text" id="username" placeholder="Enter a unique username" />
+      <button onclick="register()">Register</button>
+    </div>
+    <p class="login-link">Already have an account? <a href="login.html">Login</a></p>
+  </div>
+
+  <script src="register.js"></script>
+</body>
+</html>
