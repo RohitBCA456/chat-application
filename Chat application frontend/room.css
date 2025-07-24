@@ -1,0 +1,248 @@
+  * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", sans-serif;
+        background: linear-gradient(to right, #141e30, #243b55);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        color: #fff;
+      }
+
+      header {
+        background: #1e1e2f;
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        position: relative;
+        flex-wrap: wrap;
+      }
+
+      .header-info {
+        flex: 1;
+        padding-right: 120px; /* prevent overlap with buttons */
+      }
+
+      .header-buttons {
+        display: flex;
+        gap: 10px;
+        position: absolute;
+        right: 20px;
+        top: 15px;
+        flex-wrap: wrap;
+      }
+
+      #delete-room-btn,
+      #leave-room-btn {
+        padding: 8px 14px;
+        border-radius: 6px;
+        border: none;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.3s;
+        display: none;
+        white-space: nowrap;
+      }
+
+      #delete-room-btn {
+        background: #ff4d4d;
+        color: white;
+      }
+
+      #delete-room-btn:hover {
+        background: #e64545;
+      }
+
+      #leave-room-btn {
+        background: #ffb84d;
+        color: #1e1e2f;
+      }
+
+      #leave-room-btn:hover {
+        background: #e6a440;
+      }
+
+      @media (max-width: 480px) {
+        .header-buttons {
+          flex-direction: column;
+          position: static;
+          margin-top: 10px;
+          align-items: flex-end;
+        }
+
+        header {
+          padding-bottom: 20px;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .header-info {
+          padding-right: 0;
+        }
+      }
+
+      .chat-container {
+        flex: 1;
+        padding: 15px 20px;
+        overflow-y: auto;
+        position: relative; /* Add this line */
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .message {
+        background: #2d2d3f;
+        padding: 16px;
+        border-radius: 10px;
+        margin: 12px 0;
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+        max-width: 90%;
+        position: relative; /* important */
+        transition: all 0.3s ease;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        z-index: 1; /* ensures stacking context */
+      }
+
+      .message:hover {
+        transform: scale(1.02);
+      }
+
+      .message.pinned {
+        background: #fffbcc;
+        color: #1e1e2f;
+        font-weight: bold;
+        border: 2px solid #ffc107;
+      }
+
+      .message.pinned .message-content span,
+      .message.pinned strong {
+        color: #4fffb6;
+      }
+
+      .pop-up-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        background-color: #6c63ff;
+        color: #fff;
+        font-weight: bold;
+        cursor: pointer;
+        border: none;
+        outline: none;
+        transition: background-color 0.3s, transform 0.3s;
+        font-size: 14px;
+        display: inline-block;
+        margin: 0 5px;
+      }
+
+      .pop-up-btn:hover {
+        background-color: #574fd6;
+        transform: translateY(-2px);
+      }
+
+      .pop-up-btn:active {
+        background-color: #453bb5;
+        transform: translateY(0);
+      }
+
+      .pop-up-btn:focus {
+        outline: 2px solid #c48a00;
+        outline-offset: 2px;
+      }
+
+      .pop-up-btn.edit-btn {
+        background-color: #ffb84d;
+        color: #1e1e2f;
+      }
+
+      .pop-up-btn.edit-btn:hover {
+        background-color: #e6a440;
+      }
+
+      .pop-up-btn.delete-btn {
+        background-color: #ff4d4d;
+        color: #fff;
+      }
+
+      .pop-up-btn.delete-btn:hover {
+        background-color: #e64545;
+      }
+
+      .pop-up-btn.pin-btn {
+        background-color: #fffbcc;
+        color: #1e1e2f;
+      }
+
+      .pop-up-btn.pin-btn:hover {
+        background-color: #e6a440;
+      }
+
+      .pop-up-btn:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+
+      .message.mine {
+        align-self: flex-end;
+        background: #6c63ff;
+        color: white;
+      }
+
+      .message.other {
+        align-self: flex-start;
+        background: #2d2d3f;
+      }
+
+      .timestamp {
+        font-size: 0.75rem;
+        color: #ccc;
+        text-align: right;
+        margin-left: 10px;
+      }
+
+      .input-box {
+        display: flex;
+        padding: 15px;
+        background: #1e1e2f;
+        gap: 10px;
+      }
+      .edit-input {
+        display: inline;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: inherit;
+        font: inherit;
+        padding: 0;
+        margin: 0;
+        width: auto;
+        min-width: 100px;
+      }
+
+      .input-box input {
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        border: none;
+      }
+
+      .input-box button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        background: #6c63ff;
+        color: white;
+        cursor: pointer;
+      }
+
+      .input-box button:hover {
+        background: #574fd6;
+      }
