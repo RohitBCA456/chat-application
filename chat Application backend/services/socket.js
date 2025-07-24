@@ -13,7 +13,7 @@ export const setupSocket = (server) => {
   io.on("connection", (socket) => {
     console.log("User connected", socket.id);
 
-    // 🔗 Join a room and load previous messages
+    // Join a room and load previous messages
     socket.on("join-room", async (roomId) => {
       try {
         socket.join(roomId);
@@ -26,7 +26,7 @@ export const setupSocket = (server) => {
       }
     });
 
-    // ✉️ Send a message to room
+    // Send a message to room
     socket.on("send-message", async (data) => {
       const { username, roomId, message } = data;
       try {
@@ -50,17 +50,17 @@ export const setupSocket = (server) => {
           _id: newMessage._id,
         };
 
-        // 🟡 Emit to everyone in the room except sender
+        // Emit to everyone in the room except sender
         socket.to(roomId).emit("receive-message", messagePayload);
 
-        // ✅ Emit to sender directly
+        // Emit to sender directly
         socket.emit("receive-message", messagePayload);
       } catch (error) {
         console.error("Error sending message:", error);
       }
     });
 
-    // 📝 Edit a message in real-time
+    // Edit a message in real-time
     socket.on("edit-message", async ({ id, newText, roomId }) => {
       try {
         const message = await Message.findById(id);
@@ -78,7 +78,7 @@ export const setupSocket = (server) => {
       }
     });
 
-    // ❌ Delete a message in real-time
+    // Delete a message in real-time
     socket.on("delete-message", async ({ id, roomId }) => {
       try {
         const deleted = await Message.findByIdAndDelete(id);
@@ -91,7 +91,7 @@ export const setupSocket = (server) => {
       }
     });
 
-    // 🔌 Handle disconnect
+    // Handle disconnect
     socket.on("disconnect", () => {
       console.log("User disconnected", socket.id);
     });

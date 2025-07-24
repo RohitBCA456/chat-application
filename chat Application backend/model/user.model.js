@@ -1,3 +1,5 @@
+//user model
+
 import mongoose, { Schema } from "mongoose";
 import JWT from "jsonwebtoken";
 
@@ -15,6 +17,7 @@ const userSchema = new Schema(
   { timestamps: true }
 );
 
+// generating jwt accessToken
 userSchema.methods.generateToken = async function () {
   return JWT.sign(
     {

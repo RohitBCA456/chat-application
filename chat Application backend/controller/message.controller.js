@@ -1,4 +1,6 @@
 import { Message } from "../model/message.model.js";
+
+//editMessage controller
 const editMessage = async (req, res) => {
   try {
     const { id, newText } = req.body; // Get the ID and new text from the request body
@@ -23,6 +25,7 @@ const editMessage = async (req, res) => {
   }
 }
 
+// deleteMessage controller
 const deleteMessage = async (req, res) => {
   try {
     const { id } = req.body; // Get the ID from the request body

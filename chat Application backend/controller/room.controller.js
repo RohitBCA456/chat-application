@@ -1,19 +1,21 @@
 import { Room } from "../model/room.model.js";
 import { User } from "../model/user.model.js";
+
+// deleteRoom controller
 const deleteRoom = async (req, res) => {
   try {
     const userId = req.user?._id;
-    const user = await User.findById(userId);
+    const user = await User.findById(userId); // get the user data from database through userId
     console.log(user);
     if (!user) {
       return res
         .status(404)
         .json({ message: "User not found for deleting the room." });
     }
-    const userRoom = await Room.findOne({ username: user.username });
+    const userRoom = await Room.findOne({ username: user.username }); // find one room with the username
     console.log(userRoom);
     // Find the room and delete it
-    const room = await Room.findOneAndDelete({ _id: userRoom._id });
+    const room = await Room.findOneAndDelete({ _id: userRoom._id }); // delete the one room using the roomId
     if (!room) {
       return res.status(404).json({ message: "Room not found." });
     }
@@ -29,11 +31,12 @@ const deleteRoom = async (req, res) => {
   }
 };
 
+// leaveRoom controller
 const leaveRoom = async (req, res) => {
   try {
     const username = req.body;
     console.log(username);
-    const user = await User.findOneAndDelete(username);
+    const user = await User.findOneAndDelete(username); // delete the user
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }

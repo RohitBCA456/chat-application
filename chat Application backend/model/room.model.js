@@ -1,3 +1,5 @@
+// room model
+
 import mongoose from "mongoose";
 
 const roomSchema = new mongoose.Schema({

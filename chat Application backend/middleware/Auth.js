@@ -1,3 +1,5 @@
+// middleware to extract the userdetials from the jwt accessToken stored in the browser cookie
+
 import { User } from "../model/user.model.js";
 import JWT from "jsonwebtoken";
 const authMiddleware = (async (req, res, next) => {

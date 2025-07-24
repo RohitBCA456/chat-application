@@ -1,9 +1,13 @@
+// declaring socket as global variable
 let socket;
 
+// onLoad function
 document.addEventListener("DOMContentLoaded", () => {
+  // fetching the user from localStorage
   const userData = localStorage.getItem("user");
   if (!userData) return alert("User not found");
 
+  //parse the userData to JSON and save it to user variable
   const user = JSON.parse(userData);
   const { username, roomId, isOwner } = user;
 
@@ -11,24 +15,30 @@ document.addEventListener("DOMContentLoaded", () => {
     isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
 
+  // fetching the input values
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
+  //initializing the socket connection with the server
   socket = io("https://chat-application-howg.onrender.com");
 
+  // connecting and emitting join-room function from backend
   socket.on("connect", () => console.log("Connected to server!"));
   socket.emit("join-room", roomId);
 
+  // receiving message from socket connection by the receiver
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
   });
 
+  // laod-message function to load each and every message on real-time
   socket.on("load-messages", (messages) => {
     messages.forEach(({ sender, content, timestamp, _id }) => {
       displayMessage(sender, content, timestamp, _id);
     });
   });
 
+  //edit-message function to edit message at real-time
   socket.on("message-edited", ({ id, newText }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
@@ -37,6 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  //delete-message function to delete message at real-time
   socket.on("message-deleted", ({ id }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
@@ -44,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  //function to send message at real-time
   window.sendMessage = function () {
     const input = document.getElementById("message");
     const message = input.value.trim();
@@ -56,6 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 });
 
+// allowing users to send links that are clickable
 function linkify(text) {
   return text.replace(
     /(https?:\/\/[^\s]+)/g,
@@ -63,6 +76,7 @@ function linkify(text) {
   );
 }
 
+// function to display the message just after send-message function
 function displayMessage(user, text, timestamp = null, messageId = null) {
   const chat = document.getElementById("chat");
   const messageEl = document.createElement("div");
@@ -71,6 +85,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   }`;
   if (messageId) messageEl.dataset.id = messageId;
 
+  // display the time : when the message was send
   const time = new Date(timestamp || Date.now()).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -89,6 +104,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   const actionBtns = document.createElement("div");
   actionBtns.className = "action-buttons";
 
+  // allow only the sender to delete and edit the message
   if (user === document.getElementById("username").textContent) {
     actionBtns.innerHTML += `
       <button onclick="editMessage(this)" class="pop-up-btn">Edit</button>
@@ -96,6 +112,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
     `;
   }
 
+  // the receiver can only pin the message
   const isPinned = messageEl.classList.contains("pinned");
   actionBtns.innerHTML += `<button onclick="togglePin(this)" class="pop-up-btn">${
     isPinned ? "Unpin" : "Pin"
@@ -110,6 +127,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   messageEl.scrollIntoView({ behavior: "smooth" });
 }
 
+// function to edit the message
 window.editMessage = function (btn) {
   const messageCard = btn.closest(".message");
   const messageId = messageCard.dataset.id;
@@ -167,6 +185,7 @@ window.editMessage = function (btn) {
   }
 };
 
+// function to delete the message
 window.deleteMessage = function (btn) {
   const messageCard = btn.closest(".message");
   const messageId = messageCard.dataset.id;
@@ -175,11 +194,13 @@ window.deleteMessage = function (btn) {
   socket.emit("delete-message", { id: messageId, roomId });
 };
 
+// delete room function
 window.deleteRoom = function () {
   if (!confirm("Are you sure you want to delete the room?")) return;
   const user = JSON.parse(localStorage.getItem("user"));
   if (!user?.roomId) return console.error("Room ID not found in localStorage.");
 
+  // get method to delete the room of the current user by extracting the user.id from the auth.js middleware at backend
   fetch("https://chat-application-howg.onrender.com/room/deleteroom", {
     method: "GET",
     credentials: "include",
@@ -198,22 +219,25 @@ window.deleteRoom = function () {
     .catch(console.error);
 };
 
+//leaving room function for the user that joined the room and is not the owner of the room
 window.leaveRoom = function () {
   if (confirm("Are you sure you want to leave the room?")) {
     const user = JSON.parse(localStorage.getItem("user"));
     if (!user?.roomId)
       return console.error("Room ID not found in localStorage.");
 
+    //backend route to leave the room by sending the username of the current user
     fetch("https://chat-application-howg.onrender.com/room/leaveroom", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: user.username }),
     });
+    //removing the user data from localStorage and redirecting to mainPage.html
     localStorage.removeItem("user");
     window.location.href = "mainPage.html";
   }
 };
-
+//functionality to pin and unpin the message
 window.togglePin = function (btn) {
   const messageCard = btn.closest(".message");
   const isPinned = messageCard.classList.toggle("pinned");
@@ -221,6 +245,7 @@ window.togglePin = function (btn) {
   messageCard.querySelector(".message-popup")?.remove();
 };
 
+//functionality to track the status ispinned or not
 document.addEventListener("click", (e) => {
   const isInsidePopup = e.target.closest(".message-popup");
   const isInsideMessage = e.target.closest(".message");

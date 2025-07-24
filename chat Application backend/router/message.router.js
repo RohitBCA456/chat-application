@@ -6,7 +6,7 @@ import {
 
 const router = Router();
 
-router.route("/edit").post(editMessage);
-router.route("/delete").post(deleteMessage);
+router.route("/edit").post(editMessage); // redirect to editMessage backend controller function
+router.route("/delete").post(deleteMessage); // redirect to deleteMessage backend controller function
 
-export default router;
+export default router; // export the default router
