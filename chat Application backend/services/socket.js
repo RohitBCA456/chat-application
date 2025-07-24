@@ -18,7 +18,9 @@ export const setupSocket = (server) => {
       try {
         socket.join(roomId);
         const messages = await Message.find({ roomId }).sort({ timestamp: 1 });
+
         socket.emit("load-messages", messages);
+        socket.emit("joined-room"); // Optional: notify frontend when joined
       } catch (error) {
         console.error("Error loading messages:", error);
       }
@@ -28,9 +30,9 @@ export const setupSocket = (server) => {
     socket.on("send-message", async (data) => {
       const { username, roomId, message } = data;
       try {
-        // ⚠️ Ensure the sender is in the room
+        // Ensure the sender is in the room (safety check)
         if (!socket.rooms.has(roomId)) {
-          socket.join(roomId); // socket.join is idempotent (safe to call repeatedly)
+          socket.join(roomId);
         }
 
         const newMessage = new Message({
@@ -41,13 +43,18 @@ export const setupSocket = (server) => {
 
         await newMessage.save();
 
-        // ✅ Emit to all users in the room INCLUDING the sender
-        io.to(roomId).emit("receive-message", {
+        const messagePayload = {
           username,
           message,
           timestamp: newMessage.timestamp,
           _id: newMessage._id,
-        });
+        };
+
+        // 🟡 Emit to everyone in the room except sender
+        socket.to(roomId).emit("receive-message", messagePayload);
+
+        // ✅ Emit to sender directly
+        socket.emit("receive-message", messagePayload);
       } catch (error) {
         console.error("Error sending message:", error);
       }
@@ -77,7 +84,7 @@ export const setupSocket = (server) => {
         const deleted = await Message.findByIdAndDelete(id);
         if (deleted) {
           io.to(roomId).emit("message-deleted", { id });
-          socket.emit("message-deleted", { id });
+          socket.emit("message-deleted", { id }); // Optional direct emit
         }
       } catch (error) {
         console.error("Error deleting message:", error);
@@ -86,7 +93,7 @@ export const setupSocket = (server) => {
 
     // 🔌 Handle disconnect
     socket.on("disconnect", () => {
-      console.log("User disconnected");
+      console.log("User disconnected", socket.id);
     });
   });
 
