@@ -1,6 +1,6 @@
 async function createRoom() {
   try {
-    const createRes = await fetch("http://localhost:5000/user/createroom", {
+    const createRes = await fetch("https://chat-application-howg.onrender.com/user/createroom", {
       method: "GET",
       headers: { "Content-Type": "application/json" },
       credentials: "include", // send cookie to backend
@@ -38,7 +38,7 @@ async function joinRoom() {
   if (!roomId) return alert("Enter the Room ID");
 
   try {
-    const joinRes = await fetch("http://localhost:5000/user/joinroom", {
+    const joinRes = await fetch("https://chat-application-howg.onrender.com/user/joinroom", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
