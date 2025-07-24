@@ -8,15 +8,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const user = JSON.parse(userData);
   const { username, roomId, isOwner } = user;
 
-  document.getElementById(isOwner ? "delete-room-btn" : "leave-room-btn").style.display = "inline-block";
+  document.getElementById(
+    isOwner ? "delete-room-btn" : "leave-room-btn"
+  ).style.display = "inline-block";
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
+
+
+  // ✅ Join the room and fetch messages after connection established
+  // Ensure socket is connected before emitting
+  function waitForSocketConnection(callback) {
+    if (socket && socket.connected) {
+      callback();
+    } else {
+      setTimeout(() => waitForSocketConnection(callback), 100);
+    }
+  }
 
   // ✅ Initialize socket only once
   socket = io("https://chat-application-howg.onrender.com");
 
-  // ✅ Join the room and fetch messages after connection established
-  socket.on("connect", () => {
+  waitForSocketConnection(() => {
     console.log("✅ Connected to server");
     socket.emit("join-room", roomId);
     fetchMessageHistoryAndRender(roomId); // fallback fetch
@@ -65,13 +77,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ✅ Make URLs clickable in messages
 function linkify(text) {
-  return text.replace(/(https?:\/\/[^\s]+)/g, (url) => `<a href="${url}" target="_blank">${url}</a>`);
+  return text.replace(
+    /(https?:\/\/[^\s]+)/g,
+    (url) => `<a href="${url}" target="_blank">${url}</a>`
+  );
 }
 
 // ✅ Fetch and render messages
 async function fetchMessageHistoryAndRender(roomId) {
   try {
-    const res = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
+    const res = await fetch(
+      `https://chat-application-howg.onrender.com/message/messages/${roomId}`
+    );
     const data = await res.json();
     if (!Array.isArray(data.messages)) return;
 
@@ -89,7 +106,9 @@ async function fetchMessageHistoryAndRender(roomId) {
 function displayMessage(user, text, timestamp = null, messageId = null) {
   const chat = document.getElementById("chat");
   const messageEl = document.createElement("div");
-  messageEl.className = `message ${user === document.getElementById("username").textContent ? "mine" : "other"}`;
+  messageEl.className = `message ${
+    user === document.getElementById("username").textContent ? "mine" : "other"
+  }`;
   if (messageId) messageEl.dataset.id = messageId;
 
   const time = new Date(timestamp || Date.now()).toLocaleTimeString([], {
@@ -99,7 +118,9 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
 
   const content = document.createElement("div");
   content.className = "message-content";
-  content.innerHTML = `<p><strong>${user}:</strong> <span>${linkify(text)}</span></p>`;
+  content.innerHTML = `<p><strong>${user}:</strong> <span>${linkify(
+    text
+  )}</span></p>`;
 
   const ts = document.createElement("div");
   ts.className = "timestamp";
@@ -116,7 +137,9 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   }
 
   const isPinned = messageEl.classList.contains("pinned");
-  actionBtns.innerHTML += `<button onclick="togglePin(this)" class="pop-up-btn pin-btn">${isPinned ? "Unpin" : "Pin"}</button>`;
+  actionBtns.innerHTML += `<button onclick="togglePin(this)" class="pop-up-btn pin-btn">${
+    isPinned ? "Unpin" : "Pin"
+  }</button>`;
 
   content.appendChild(actionBtns);
   messageEl.append(content, ts);
