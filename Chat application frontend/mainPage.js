@@ -1,18 +1,19 @@
-// function to create room 
+// function to create room
 async function createRoom() {
   try {
-    // get method to create a room associated with the current user
-    const createRes = await fetch("https://chat-application-howg.onrender.com/user/createroom", {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include", // send cookie to backend
-    });
-    // storing the data of the createRoom in createData variable
+    const createRes = await fetch(
+      "https://chat-application-howg.onrender.com/user/createroom",
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      }
+    );
+
     const createData = await createRes.json();
-    //if reponse is not present or valid popup alert message of the error that occured
     if (!createRes.ok) return alert(createData.message);
 
-    // Save user info to localStorage
+    // ✅ Save user info to localStorage
     localStorage.setItem(
       "user",
       JSON.stringify({
@@ -22,17 +23,10 @@ async function createRoom() {
       })
     );
 
-    // Immediately update the list of rooms shown in the corner
-    fetchRooms();
-
-    // Redirect after short delay (optional)
-    setTimeout(() => {
-      window.location.href =
-        "room.html";
-    }, 500);
+    // ✅ Redirect immediately — no delay needed
+    window.location.href = `room.html?room=${createData.roomId}`;
   } catch (error) {
-    //consoling and sending alert message if any error occured
-    console.log("Create Room Error:", error);
+    console.error("Create Room Error:", error);
     alert("Something went wrong while creating room.");
   }
 }
@@ -45,14 +39,17 @@ async function joinRoom() {
 
   try {
     // sending the roomId to join the room using the backend route
-    const joinRes = await fetch("https://chat-application-howg.onrender.com/user/joinroom", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ roomId }),
-    });
+    const joinRes = await fetch(
+      "https://chat-application-howg.onrender.com/user/joinroom",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ roomId }),
+      }
+    );
 
-    // storing the response in the joinData variable 
+    // storing the response in the joinData variable
     const joinData = await joinRes.json();
     console.log(joinData);
     // extracting the username and isOwner data from the response
@@ -61,10 +58,7 @@ async function joinRoom() {
     if (!joinRes.ok) return alert(joinData.message);
 
     // storing the response in the localStorage of the browser
-    localStorage.setItem(
-      "user",
-      JSON.stringify({ username, roomId, isOwner })
-    );
+    localStorage.setItem("user", JSON.stringify({ username, roomId, isOwner }));
 
     // redirecting the user to room.html page on successful joinRoom
     window.location.href = `room.html?room=${roomId}`;
@@ -78,21 +72,22 @@ async function joinRoom() {
 // function to fetchRooms that exist
 async function fetchRooms() {
   try {
-
     //get all the rooms that are currently available
-    const res = await fetch("https://chat-application-howg.onrender.com/room/getallroom");
+    const res = await fetch(
+      "https://chat-application-howg.onrender.com/room/getallroom"
+    );
     const rooms = await res.json();
 
     const roomContainer = document.getElementById("roomContainer");
     roomContainer.innerHTML = "";
 
-    // if no room found 
+    // if no room found
     if (rooms.length === 0) {
       roomContainer.innerHTML = "<li>No rooms available</li>";
       return;
     }
 
-    // displaying the rooms in the ui 
+    // displaying the rooms in the ui
     rooms.forEach((room) => {
       const li = document.createElement("li");
       li.textContent = `👤 ${room.username} — 🆔 ${room.roomId}`;
