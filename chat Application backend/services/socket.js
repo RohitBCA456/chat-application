@@ -28,15 +28,20 @@ export const setupSocket = (server) => {
     socket.on("send-message", async (data) => {
       const { username, roomId, message } = data;
       try {
-        socket.join(roomId); // Ensure sender is joined to the room (redundant, but safe)
+        // ⚠️ Ensure the sender is in the room
+        if (!socket.rooms.has(roomId)) {
+          socket.join(roomId); // socket.join is idempotent (safe to call repeatedly)
+        }
 
         const newMessage = new Message({
           roomId,
           sender: username,
           content: message,
         });
+
         await newMessage.save();
 
+        // ✅ Emit to all users in the room INCLUDING the sender
         io.to(roomId).emit("receive-message", {
           username,
           message,
