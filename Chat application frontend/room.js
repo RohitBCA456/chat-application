@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket = io("https://chat-application-howg.onrender.com");
 
   socket.on("connect", () => console.log("Connected to server!"));
-  socket.emit("join-room", roomId.trim());
+  socket.emit("join-room", roomId);
 
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!message) return;
 
     // Emit the message to server — no local display to avoid duplication
-    socket.emit("send-message", { roomId: roomId.trim(), username, message });
+    socket.emit("send-message", { roomId, username, message });
 
     input.value = "";
   };
