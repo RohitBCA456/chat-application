@@ -41,4 +41,4 @@ const getAllRooms = async (req, res) => {
   }
 };
 
-export { deleteRoom, getAllRooms, leaveRoom };
+export { deleteRoom, getAllRooms };
