@@ -118,32 +118,52 @@ window.editMessage = function (btn) {
   const span = messageCard.querySelector(".message-content span");
   const oldText = span.textContent.trim();
 
+  // Prevent multiple inputs
+  if (messageCard.querySelector("input.edit-input")) return;
+
   const input = document.createElement("input");
   input.type = "text";
   input.value = oldText;
   input.className = "edit-input";
 
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      const newText = input.value.trim();
-      if (!newText || newText === oldText) return cancelEdit();
-
-      socket.emit("edit-message", { id: messageId, newText, roomId });
-
-      span.textContent = newText;
-
-      cancelEdit();
-    } else if (e.key === "Escape") {
-      cancelEdit();
-    }
-  });
-
+  // Replace span with input
   span.replaceWith(input);
   input.focus();
 
+  // Change button to Save
+  btn.textContent = "Save";
+  btn.onclick = () => saveEdit();
+
+  function saveEdit() {
+    const newText = input.value.trim();
+    if (!newText || newText === oldText) {
+      cancelEdit();
+      return;
+    }
+
+    // Emit edit to backend
+    socket.emit("edit-message", { id: messageId, newText, roomId });
+
+    // Replace input with updated span
+    const updatedSpan = document.createElement("span");
+    updatedSpan.innerHTML = linkify(newText);
+    input.replaceWith(updatedSpan);
+
+    // Revert Save button to Edit
+    btn.textContent = "Edit";
+    btn.onclick = () => window.editMessage(btn);
+  }
+
+  // Allow Enter/Escape support
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveEdit();
+    if (e.key === "Escape") cancelEdit();
+  });
+
   function cancelEdit() {
     input.replaceWith(span);
-    document.querySelectorAll(".message-popup").forEach((p) => p.remove());
+    btn.textContent = "Edit";
+    btn.onclick = () => window.editMessage(btn);
   }
 };
 
