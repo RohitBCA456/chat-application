@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
-  socket = io("http://localhost:5000");
+  socket = io("https://chat-application-howg.onrender.com");
 
   socket.on("connect", () => console.log("Connected to server!"));
   socket.emit("join-room", roomId);
@@ -160,7 +160,7 @@ window.deleteRoom = function () {
   const user = JSON.parse(localStorage.getItem("user"));
   if (!user?.roomId) return console.error("Room ID not found in localStorage.");
 
-  fetch("http://localhost:5000/room/deleteroom", {
+  fetch("https://chat-application-howg.onrender.com/room/deleteroom", {
     method: "GET",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -184,7 +184,7 @@ window.leaveRoom = function () {
     if (!user?.roomId)
       return console.error("Room ID not found in localStorage.");
 
-    fetch("http://localhost:5000/room/leaveroom", {
+    fetch("https://chat-application-howg.onrender.com/room/leaveroom", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: user.username }),

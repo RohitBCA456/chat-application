@@ -64,7 +64,7 @@ async function joinRoom() {
 
 async function fetchRooms() {
   try {
-    const res = await fetch("http://localhost:5000/room/getallroom");
+    const res = await fetch("https://chat-application-howg.onrender.com/room/getallroom");
     const rooms = await res.json();
 
     const roomContainer = document.getElementById("roomContainer");

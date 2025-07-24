@@ -3,7 +3,7 @@ async function register() {
   if (!username) return alert("Please enter a username");
 
   try {
-    const response = await fetch("http://localhost:5000/user/register", {
+    const response = await fetch("https://chat-application-howg.onrender.com/user/register", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

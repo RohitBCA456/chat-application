@@ -2,7 +2,7 @@ async function login() {
   const username = document.getElementById("login-username").value.trim();
   if (!username) return alert("Please enter a username");
 
-  const response = await fetch("http://localhost:5000/user/login", {
+  const response = await fetch("https://chat-application-howg.onrender.com/user/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
