@@ -56,15 +56,20 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   //function to send message at real-time
+  // Function to send message at real-time
   window.sendMessage = function () {
     const input = document.getElementById("message");
     const message = input.value.trim();
     if (!message) return;
 
-    // Emit the message to server — no local display to avoid duplication
     socket.emit("send-message", { roomId, username, message });
 
     input.value = "";
+
+    // 🔁 Re-fetch history after sending message (fallback if socket fails)
+    setTimeout(() => {
+      fetchMessageHistoryAndRender(roomId);
+    }, 500); // Slight delay to allow message to be saved
   };
 });
 
@@ -75,6 +80,25 @@ function linkify(text) {
     (url) => `<a href="${url}" target="_blank">${url}</a>`
   );
 }
+
+async function fetchMessageHistoryAndRender(roomId) {
+  try {
+    const response = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
+    const data = await response.json();
+    if (!Array.isArray(data.messages)) return;
+
+    // Clear existing chat to avoid duplication
+    document.getElementById("chat").innerHTML = "";
+
+    // Re-render messages
+    data.messages.forEach(({ sender, content, timestamp, _id }) => {
+      displayMessage(sender, content, timestamp, _id);
+    });
+  } catch (error) {
+    console.error("Error fetching message history:", error);
+  }
+}
+
 
 // function to display the message just after send-message function
 function displayMessage(user, text, timestamp = null, messageId = null) {
@@ -222,16 +246,6 @@ window.deleteRoom = function () {
 //leaving room function for the user that joined the room and is not the owner of the room
 window.leaveRoom = function () {
   if (confirm("Are you sure you want to leave the room?")) {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user?.roomId)
-      return console.error("Room ID not found in localStorage.");
-
-    //backend route to leave the room by sending the username of the current user
-    fetch("https://chat-application-howg.onrender.com/room/leaveroom", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: user.username }),
-    });
     //removing the user data from localStorage and redirecting to mainPage.html
     localStorage.removeItem("user");
     window.location.href = "mainPage.html";
