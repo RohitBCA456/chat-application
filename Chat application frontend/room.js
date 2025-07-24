@@ -23,8 +23,15 @@ document.addEventListener("DOMContentLoaded", () => {
   socket = io("https://chat-application-howg.onrender.com");
 
   // connecting and emitting join-room function from backend
-  socket.on("connect", () => console.log("Connected to server!"));
-  socket.emit("join-room", roomId);
+  socket = io("https://chat-application-howg.onrender.com");
+
+  socket.on("connect", () => {
+    console.log("✅ Connected to server");
+    socket.emit("join-room", roomId); // only emit here
+
+    // Fetch again in case socket fails
+    fetchMessageHistoryAndRender(roomId);
+  });
 
   // receiving message from socket connection by the receiver
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
@@ -83,7 +90,9 @@ function linkify(text) {
 
 async function fetchMessageHistoryAndRender(roomId) {
   try {
-    const response = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
+    const response = await fetch(
+      `https://chat-application-howg.onrender.com/message/messages/${roomId}`
+    );
     const data = await response.json();
     if (!Array.isArray(data.messages)) return;
 
@@ -98,7 +107,6 @@ async function fetchMessageHistoryAndRender(roomId) {
     console.error("Error fetching message history:", error);
   }
 }
-
 
 // function to display the message just after send-message function
 function displayMessage(user, text, timestamp = null, messageId = null) {
