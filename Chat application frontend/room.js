@@ -3,11 +3,9 @@ let socket;
 
 // onLoad function
 document.addEventListener("DOMContentLoaded", () => {
-  // fetching the user from localStorage
   const userData = localStorage.getItem("user");
   if (!userData) return alert("User not found");
 
-  //parse the userData to JSON and save it to user variable
   const user = JSON.parse(userData);
   const { username, roomId, isOwner } = user;
 
@@ -15,37 +13,40 @@ document.addEventListener("DOMContentLoaded", () => {
     isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
 
-  // fetching the input values
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
-  //initializing the socket connection with the server
+  // 💡 Initialize socket connection
   socket = io("https://chat-application-howg.onrender.com");
 
-  // connecting and emitting join-room function from backend
-  socket = io("https://chat-application-howg.onrender.com");
+  let messagesLoaded = false;
 
   socket.on("connect", () => {
     console.log("✅ Connected to server");
-    socket.emit("join-room", roomId); // only emit here
 
-    // Fetch again in case socket fails
-    fetchMessageHistoryAndRender(roomId);
+    // ✅ Join room after connection
+    socket.emit("join-room", roomId);
+
+    // ⏳ If `load-messages` is missed, fallback after 2 seconds
+    setTimeout(() => {
+      if (!messagesLoaded) {
+        console.warn("⚠️ Falling back to REST fetch (load-messages missed)");
+        fetchMessageHistoryAndRender(roomId);
+      }
+    }, 2000);
   });
 
-  // receiving message from socket connection by the receiver
-  socket.on("receive-message", ({ username, message, timestamp, _id }) => {
-    displayMessage(username, message, timestamp, _id);
-  });
-
-  // laod-message function to load each and every message on real-time
   socket.on("load-messages", (messages) => {
+    messagesLoaded = true; // ✅ mark messages as loaded
     messages.forEach(({ sender, content, timestamp, _id }) => {
       displayMessage(sender, content, timestamp, _id);
     });
   });
 
-  //edit-message function to edit message at real-time
+  socket.on("receive-message", ({ username, message, timestamp, _id }) => {
+    displayMessage(username, message, timestamp, _id);
+  });
+
   socket.on("message-edited", ({ id, newText }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
@@ -54,7 +55,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  //delete-message function to delete message at real-time
   socket.on("message-deleted", ({ id }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
@@ -62,23 +62,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  //function to send message at real-time
-  // Function to send message at real-time
+  // 🧪 Debugging: log disconnects or errors
+  socket.on("disconnect", () => console.warn("⚠️ Socket disconnected"));
+  socket.on("connect_error", (err) => console.error("Socket error:", err));
+
+  // ✅ Sending message
   window.sendMessage = function () {
     const input = document.getElementById("message");
     const message = input.value.trim();
     if (!message) return;
 
     socket.emit("send-message", { roomId, username, message });
-
     input.value = "";
-
-    // 🔁 Re-fetch history after sending message (fallback if socket fails)
-    setTimeout(() => {
-      fetchMessageHistoryAndRender(roomId);
-    }, 500); // Slight delay to allow message to be saved
   };
 });
+
 
 // allowing users to send links that are clickable
 function linkify(text) {
@@ -259,6 +257,7 @@ window.leaveRoom = function () {
     window.location.href = "mainPage.html";
   }
 };
+
 //functionality to pin and unpin the message
 window.togglePin = function (btn) {
   const messageCard = btn.closest(".message");

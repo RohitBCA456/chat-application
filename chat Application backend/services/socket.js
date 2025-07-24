@@ -17,10 +17,14 @@ export const setupSocket = (server) => {
     socket.on("join-room", async (roomId) => {
       try {
         socket.join(roomId);
+
+        // Acknowledge join before sending messages
+        socket.emit("joined-room");
+
         const messages = await Message.find({ roomId }).sort({ timestamp: 1 });
 
+        // Now send messages
         socket.emit("load-messages", messages);
-        socket.emit("joined-room"); // Optional: notify frontend when joined
       } catch (error) {
         console.error("Error loading messages:", error);
       }
