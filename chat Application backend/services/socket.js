@@ -28,6 +28,8 @@ export const setupSocket = (server) => {
     socket.on("send-message", async (data) => {
       const { username, roomId, message } = data;
       try {
+        socket.join(roomId); // Ensure sender is joined to the room (redundant, but safe)
+
         const newMessage = new Message({
           roomId,
           sender: username,
