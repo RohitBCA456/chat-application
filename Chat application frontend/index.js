@@ -27,7 +27,6 @@ async function register() {
     // Redirect to homepage
     window.location.href = "login.html";
   } catch (error) {
-    // print the error if any occured
     console.error("Registration error:", error);
     alert("An error occurred. Please try again.");
   }
