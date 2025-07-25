@@ -52,7 +52,9 @@ export const setupSocket = (server) => {
           .sort({ timestamp: 1 })
           .limit(100);
 
+        // ✅ Send messages and confirm join
         socket.emit("load-messages", messages);
+        socket.emit("room-joined");
       } catch (error) {
         console.error("Join room error:", error);
         socket.emit("room-error", error.message);
