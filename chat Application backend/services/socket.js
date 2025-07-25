@@ -23,11 +23,8 @@ export const setupSocket = (server) => {
     let currentRoomId = null;
 
     // Middleware to verify room membership
-    const verifyRoomMembership = (roomId) => {
-      if (
-        !roomMembers.has(roomId) ||
-        !roomMembers.get(roomId).has(currentUsername)
-      ) {
+    const verifyRoomMembership = (roomId, username) => {
+      if (!roomMembers.has(roomId) || !roomMembers.get(roomId).has(username)) {
         throw new Error("You must join the room first");
       }
       return true;
@@ -65,11 +62,9 @@ export const setupSocket = (server) => {
     socket.on("send-message", async (data) => {
       const { roomId, username, message, tempId } = data;
 
-      if (!roomMembers.has(roomId) || !roomMembers.get(roomId).has(username)) {
-        return socket.emit("error", "You must join the room first");
-      }
-
       try {
+        verifyRoomMembership(roomId, username); // Pass username explicitly
+
         const newMessage = new Message({
           roomId,
           sender: username,
@@ -89,7 +84,7 @@ export const setupSocket = (server) => {
         io.to(roomId).emit("receive-message", messagePayload);
       } catch (error) {
         console.error("Error sending message:", error);
-        socket.emit("error", "Failed to send message");
+        socket.emit("error", error.message);
       }
     });
 

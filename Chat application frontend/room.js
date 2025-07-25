@@ -34,6 +34,11 @@ document.addEventListener("DOMContentLoaded", () => {
     socket.emit("join-room", roomId, username);
   });
 
+  socket.on("room-joined", () => {
+    roomJoined = true;
+    console.log("✅ Successfully joined room");
+  });
+
   socket.on("disconnect", () => {
     isSocketReady = false;
     console.log("Disconnected from server");
@@ -143,7 +148,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   const time = new Date(timestamp || Date.now()).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
-  })
+  });
 
   const content = document.createElement("div");
   content.className = "message-content";
@@ -196,6 +201,10 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
 
 // ✅ Send message function
 window.sendMessage = function () {
+  if (!roomJoined) {
+    alert("Please wait until you've fully joined the room");
+    return;
+  }
   const userData = localStorage.getItem("user");
   if (!userData) {
     alert("Session expired. Please rejoin the room.");
