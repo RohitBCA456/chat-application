@@ -1,6 +1,7 @@
 import { User } from "../model/user.model.js";
 import { Room } from "../model/room.model.js";
 
+// registering the user
 const registerUser = async (req, res) => {
   try {
     const { username } = req.body;
@@ -17,15 +18,7 @@ const registerUser = async (req, res) => {
       username: username,
     });
 
-    // const token = await user_data.generateToken(user_data._id);
-    // user_data.token = token;
     user_data.save({ validateBeforeSave: false });
-    // const options = {
-    //   httpOnly: true,
-    //   secure: true,
-    //   sameSite: "None",
-    //   path: "/",
-    // };
     return res
       .status(200)
       .json({ message: "user enter thr app in successfully.", user_data });
@@ -35,6 +28,7 @@ const registerUser = async (req, res) => {
   }
 };
 
+// login the user
 const login = async (req, res) => {
   const { username } = req.body;
 
@@ -64,7 +58,7 @@ const login = async (req, res) => {
   });
 };
 
-
+// create room functionality
 const createRoom = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -97,6 +91,7 @@ const createRoom = async (req, res) => {
   }
 };
 
+// join room functionality
 const joinRoom = async (req, res) => {
   try {
     const { roomId } = req.body;
