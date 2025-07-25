@@ -1,7 +1,7 @@
 // declaring socket as global variable
 let socket;
 let isSocketReady = false;
-const messageCache = new Set(); // Track displayed messages to prevent duplicates
+const messageCache = new Set();
 
 document.addEventListener("DOMContentLoaded", () => {
   const userData = localStorage.getItem("user");
@@ -10,29 +10,35 @@ document.addEventListener("DOMContentLoaded", () => {
   const user = JSON.parse(userData);
   const { username, roomId, isOwner } = user;
 
+  // Initialize UI elements
   document.getElementById(
     isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
-  // Initialize socket with proper authentication
-  socket = io("https://chat-application-howg.onrender.com", {
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    autoConnect: true,
-    auth: {
-      username: username,
-      roomId: roomId,
-    },
-    transports: ["websocket", "polling"], // Specify transports explicitly
-  });
+  // Initialize socket with error handling
+  try {
+    socket = io("https://chat-application-howg.onrender.com", {
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      autoConnect: true,
+      auth: { username, roomId },
+      transports: ["websocket", "polling"]
+    });
 
+    setupSocketHandlers(socket, roomId, username);
+  } catch (error) {
+    console.error("Socket initialization failed:", error);
+    alert("Connection error. Please refresh the page.");
+  }
+});
+
+function setupSocketHandlers(socket, roomId, username) {
   // Socket event handlers
   socket.on("connect", () => {
     console.log("✅ Connected to server");
     isSocketReady = true;
-    // Include username when joining room
     socket.emit("join-room", { roomId, username });
   });
 
@@ -45,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
     console.error("Connection error:", err);
   });
 
-  // Message handlers with duplicate prevention
+  // Message handlers
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     if (!messageCache.has(_id)) {
       messageCache.add(_id);
@@ -55,7 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   socket.on("load-messages", (messages) => {
     const chat = document.getElementById("chat");
-    // Clear only if empty to prevent duplicates
     if (chat.children.length === 0) {
       messages.forEach(({ sender, content, timestamp, _id }) => {
         if (!messageCache.has(_id)) {
@@ -78,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
       messageCard.remove();
-      messageCache.delete(id); // Remove from cache
+      messageCache.delete(id);
     }
   });
 
@@ -87,22 +92,27 @@ document.addEventListener("DOMContentLoaded", () => {
     alert(errorMsg);
   });
 
-  // Fallback message fetch if socket takes too long
+  // Fallback message fetch
   const fallbackTimer = setTimeout(() => {
     if (!isSocketReady) {
       fetchMessageHistoryAndRender(roomId);
     }
   }, 2000);
 
-  // Clean up fallback if socket connects
   socket.on("connect", () => {
     clearTimeout(fallbackTimer);
   });
-});
+}
 
-// ✅ Send message function (updated with message queue and retry logic)
-const messageQueue = [];
+// ... rest of your existing functions ...
+
+// ✅ Send message function with better error handling
 window.sendMessage = function () {
+  if (!socket) {
+    alert("Connection not initialized. Please refresh the page.");
+    return;
+  }
+
   const userData = localStorage.getItem("user");
   if (!userData) {
     alert("Session expired. Please rejoin the room.");
@@ -120,10 +130,9 @@ window.sendMessage = function () {
     roomId,
     username,
     message,
-    tempId: "temp-" + Date.now(),
+    tempId: "temp-" + Date.now()
   };
 
-  // Optimistic UI update
   displayMessage(username, message, new Date(), messageData.tempId);
   input.value = "";
   input.focus();
@@ -132,9 +141,7 @@ window.sendMessage = function () {
     sendMessageNow(messageData);
   } else {
     messageQueue.push(messageData);
-    alert(
-      "Connection unstable. Message will be sent when connection is restored"
-    );
+    alert("Connection unstable. Message will be sent when connection is restored");
   }
 };
 
