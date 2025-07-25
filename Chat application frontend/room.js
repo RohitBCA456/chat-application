@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("connect", () => {
     console.log("✅ Connected to server");
     isSocketReady = true;
-    socket.emit("join-room", roomId);
+    socket.emit("join-room", roomId, username);
   });
 
   socket.on("disconnect", () => {
@@ -242,28 +242,6 @@ window.sendMessage = function () {
       }
     }
   );
-
-  // Fallback to HTTP
-  const fallbackTimer = setTimeout(async () => {
-    try {
-      const res = await fetch(
-        `https://chat-application-howg.onrender.com/message/send`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ roomId, username, message }),
-        }
-      );
-      if (!res.ok) throw new Error("HTTP send failed");
-    } catch (error) {
-      console.error("Fallback failed:", error);
-      const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
-      if (tempMsg) tempMsg.remove();
-    }
-  }, 2000);
-
-  socket.once("receive-message", () => clearTimeout(fallbackTimer));
 };
 
 // ... (rest of your existing functions remain exactly the same) ...
