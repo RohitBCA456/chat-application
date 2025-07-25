@@ -11,7 +11,7 @@ export const setupSocket = (server) => {
     connectionStateRecovery: {
       maxDisconnectionDuration: 2 * 60 * 1000,
       skipMiddlewares: true,
-    }
+    },
   });
 
   // Track room memberships globally
@@ -24,7 +24,10 @@ export const setupSocket = (server) => {
 
     // Middleware to verify room membership
     const verifyRoomMembership = (roomId) => {
-      if (!roomMembers.has(roomId) || !roomMembers.get(roomId).has(currentUsername)) {
+      if (
+        !roomMembers.has(roomId) ||
+        !roomMembers.get(roomId).has(currentUsername)
+      ) {
         throw new Error("You must join the room first");
       }
       return true;
@@ -56,10 +59,15 @@ export const setupSocket = (server) => {
       }
     });
 
-    socket.on("send-message", async ({ roomId, username, message }) => {
-      try {
-        verifyRoomMembership(roomId);
+    // Update the send-message handler
+    socket.on("send-message", async (data) => {
+      const { roomId, username, message, tempId } = data;
 
+      if (!userRooms.has(roomId)) {
+        return socket.emit("error", "You must join the room first");
+      }
+
+      try {
         const newMessage = new Message({
           roomId,
           sender: username,
@@ -68,15 +76,18 @@ export const setupSocket = (server) => {
 
         await newMessage.save();
 
-        io.to(roomId).emit("receive-message", {
+        const messagePayload = {
           username,
           message,
           timestamp: newMessage.timestamp,
           _id: newMessage._id,
-        });
+          tempId, // Include the tempId in the response
+        };
+
+        io.to(roomId).emit("receive-message", messagePayload);
       } catch (error) {
-        console.error("Send message error:", error);
-        socket.emit("error", error.message);
+        console.error("Error sending message:", error);
+        socket.emit("error", "Failed to send message");
       }
     });
 
@@ -86,7 +97,8 @@ export const setupSocket = (server) => {
 
         const message = await Message.findById(id);
         if (!message) throw new Error("Message not found");
-        if (message.sender !== username) throw new Error("You can only delete your own messages");
+        if (message.sender !== username)
+          throw new Error("You can only delete your own messages");
 
         await Message.findByIdAndDelete(id);
         io.to(roomId).emit("message-deleted", { id });
