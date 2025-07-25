@@ -1,8 +1,7 @@
 // declaring socket as global variable
 let socket;
 let isSocketReady = false;
-const pendingMessages = new Set(); // For tracking optimistic messages
-const displayedMessages = new Set(); // For tracking all displayed messages
+const pendingMessages = new Set();
 
 document.addEventListener("DOMContentLoaded", () => {
   const userData = localStorage.getItem("user");
@@ -48,12 +47,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Message handlers
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
-    // Skip if this is a message we're already showing optimistically
-    if (!pendingMessages.has(_id)) {
-      displayMessage(username, message, timestamp, _id);
-    } else {
-      pendingMessages.delete(_id); // Remove from pending set
+    // Check if we have a pending temp message (optimistic UI)
+    const tempMsg = document.querySelector(`[data-id^="temp-"]`);
+
+    if (tempMsg) {
+      tempMsg.remove(); // Remove the optimistic message
+      pendingMessages.delete(_id); // Clean from pending set if needed
     }
+
+    // Now display the actual message from server
+    displayMessage(username, message, timestamp, _id);
   });
 
   socket.on("load-messages", (messages) => {
@@ -101,7 +104,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ✅ Send message function
 window.sendMessage = function () {
-  // ... (existing code until the optimistic UI update)
+  // Get user data
+  const userData = localStorage.getItem("user");
+  if (!userData) {
+    alert("Session expired. Please rejoin the room.");
+    window.location.href = "mainPage.html";
+    return;
+  }
+
+  const user = JSON.parse(userData);
+  const { username, roomId } = user;
+  const input = document.getElementById("message");
+  const message = input.value.trim();
+
+  // Validate input
+  if (!message) return;
+  if (!socket || !socket.connected) {
+    alert("Connection lost. Trying to reconnect...");
+    socket.connect();
+    return;
+  }
 
   // Optimistic UI update (temporary display)
   const tempId = "temp-" + Date.now();
@@ -116,16 +138,17 @@ window.sendMessage = function () {
       roomId,
       username,
       message,
-      tempId, // Include tempId for server reference
     },
     (ack) => {
-      if (ack?.error) {
+      // Handle acknowledgment from server
+      if (ack && ack.error) {
+        console.error("Send failed:", ack.error);
         // Remove the optimistic message if failed
         const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
         if (tempMsg) tempMsg.remove();
-        displayedMessages.delete(tempId);
         alert("Failed to send: " + ack.error);
       }
+      // If success, the server will send the real message which will replace our temp one
     }
   );
 
@@ -188,28 +211,12 @@ async function fetchMessageHistoryAndRender(roomId) {
 
 // ✅ Display message bubble
 function displayMessage(user, text, timestamp = null, messageId = null) {
-  // Skip if this message is already displayed
-  if (messageId && displayedMessages.has(messageId)) {
-    return;
-  }
-
   const chat = document.getElementById("chat");
-
-  // Remove any existing temporary message with this ID
-  if (messageId && messageId.startsWith("temp-")) {
-    const existingTemp = document.querySelector(`[data-id="${messageId}"]`);
-    if (existingTemp) existingTemp.remove();
-  }
-
   const messageEl = document.createElement("div");
   messageEl.className = `message ${
     user === document.getElementById("username").textContent ? "mine" : "other"
   }`;
-
-  if (messageId) {
-    messageEl.dataset.id = messageId;
-    displayedMessages.add(messageId); // Track displayed messages
-  }
+  if (messageId) messageEl.dataset.id = messageId;
 
   const time = new Date(timestamp || Date.now()).toLocaleTimeString([], {
     hour: "2-digit",
@@ -229,11 +236,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   const actionBtns = document.createElement("div");
   actionBtns.className = "action-buttons";
 
-  // Only show action buttons for user's own messages (excluding temp messages)
-  if (
-    user === document.getElementById("username").textContent &&
-    (!messageId || !messageId.startsWith("temp-"))
-  ) {
+  if (user === document.getElementById("username").textContent) {
     actionBtns.innerHTML += `
       <button onclick="editMessage(this)" class="pop-up-btn edit-btn">Edit</button>
       <button onclick="deleteMessage(this)" class="pop-up-btn delete-btn">Delete</button>
@@ -247,19 +250,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
 
   content.appendChild(actionBtns);
   messageEl.append(content, ts);
-
-  // If this is replacing a temporary message, insert in the same position
-  const tempId = messageId?.replace(/^[^-]+-/, "temp-");
-  const tempMessage = tempId
-    ? document.querySelector(`[data-id="${tempId}"]`)
-    : null;
-
-  if (tempMessage) {
-    tempMessage.replaceWith(messageEl);
-  } else {
-    chat.appendChild(messageEl);
-  }
-
+  chat.appendChild(messageEl);
   messageEl.scrollIntoView({ behavior: "smooth" });
 }
 
