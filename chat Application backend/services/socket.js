@@ -11,7 +11,7 @@ export const setupSocket = (server) => {
     connectionStateRecovery: {
       maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
       skipMiddlewares: true,
-    }
+    },
   });
 
   io.on("connection", (socket) => {
@@ -48,7 +48,7 @@ export const setupSocket = (server) => {
     // Send a message to room
     socket.on("send-message", async (data) => {
       const { username, roomId, message } = data;
-      
+
       if (!userRooms.has(roomId)) {
         return socket.emit("error", "You must join the room first");
       }
@@ -105,27 +105,30 @@ export const setupSocket = (server) => {
     });
 
     // Delete a message in real-time
-    socket.on("delete-message", async ({ id, roomId }) => {
-      if (!userRooms.has(roomId)) {
-        return socket.emit("error", "You must join the room first");
-      }
-
+    // Update the delete-message handler in socket.js
+    socket.on("delete-message", async ({ id, roomId, username }, callback) => {
       try {
-        const message = await Message.findById(id);
-        if (!message) {
-          return socket.emit("error", "Message not found");
+        // Verify room membership
+        if (!userRooms.has(roomId)) {
+          return callback({ error: "You must join the room first" });
         }
 
-        // Verify sender is the one deleting (or room owner)
-        if (message.sender !== socket.request.session?.username) {
-          return socket.emit("error", "You can only delete your own messages");
+        const message = await Message.findById(id);
+        if (!message) {
+          return callback({ error: "Message not found" });
+        }
+
+        // Verify ownership
+        if (message.sender !== username) {
+          return callback({ error: "You can only delete your own messages" });
         }
 
         await Message.findByIdAndDelete(id);
         io.to(roomId).emit("message-deleted", { id });
+        callback({ success: true });
       } catch (error) {
         console.error("Error deleting message:", error);
-        socket.emit("error", "Failed to delete message");
+        callback({ error: "Failed to delete message" });
       }
     });
 

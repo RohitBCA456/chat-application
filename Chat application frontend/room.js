@@ -16,10 +16,14 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("username").textContent = username;
 
   // Initialize socket
+  // In your DOMContentLoaded handler
   socket = io("https://chat-application-howg.onrender.com", {
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     autoConnect: true,
+    auth: {
+      username: username, // Send username during connection
+    },
   });
 
   // Socket event handlers
@@ -291,12 +295,35 @@ window.editMessage = function (btn) {
 };
 
 // ✅ Delete message
+// Update the deleteMessage function in room.js
 window.deleteMessage = function (btn) {
   const messageCard = btn.closest(".message");
   const messageId = messageCard.dataset.id;
   const roomId = document.getElementById("room-id").textContent;
-  if (!messageId) return console.error("Message ID not found");
-  socket.emit("delete-message", { id: messageId, roomId });
+  const username = document.getElementById("username").textContent;
+
+  if (!messageId) {
+    console.error("Message ID not found");
+    return;
+  }
+
+  if (!confirm("Are you sure you want to delete this message?")) {
+    return;
+  }
+
+  socket.emit(
+    "delete-message",
+    {
+      id: messageId,
+      roomId,
+      username, // Include the username
+    },
+    (response) => {
+      if (response && response.error) {
+        alert(response.error);
+      }
+    }
+  );
 };
 
 // ✅ Delete room
