@@ -70,6 +70,7 @@ function setupSocketConnection() {
   socket.on("load-messages", handleLoadMessages);
   socket.on("new-message", handleNewMessage);
   socket.on("room-deleted", handleRoomDeleted);
+  socket.on("leave-room-success", handleLeaveRoomSuccess);
 
   // Heartbeat monitoring
   startHeartbeat();
@@ -82,10 +83,9 @@ function setupEventListeners() {
     if (e.key === "Enter") sendMessage();
   });
 
-  // Window beforeunload handler
-  window.addEventListener("beforeunload", () => {
-    if (socket) socket.emit("leave-room", currentRoomId);
-  });
+  // Button event listeners
+  document.getElementById("leave-room-btn")?.addEventListener("click", handleLeaveRoom);
+  document.getElementById("delete-room-btn")?.addEventListener("click", handleDeleteRoom);
 }
 
 /* ========== SOCKET EVENT HANDLERS ========== */
@@ -94,7 +94,6 @@ function handleConnect() {
   console.log("✅ Connected to server with ID:", socket.id);
   isSocketReady = true;
   reconnectAttempts = 0;
-  updateConnectionStatus("connected");
   
   socket.emit("join-room", currentRoomId, currentUser.username, (response) => {
     if (response?.status !== "success") {
@@ -107,7 +106,6 @@ function handleConnect() {
 function handleDisconnect(reason) {
   console.log("Disconnected:", reason);
   isSocketReady = false;
-  updateConnectionStatus("disconnected");
   
   if (reason === "io server disconnect") {
     setTimeout(() => socket.connect(), 1000);
@@ -117,17 +115,14 @@ function handleDisconnect(reason) {
 function handleReconnect(attempt) {
   console.log(`♻️ Reconnected after ${attempt} attempts`);
   isSocketReady = true;
-  updateConnectionStatus("connected");
 }
 
 function handleReconnecting(attempt) {
   console.log(`Attempting to reconnect (${attempt})...`);
-  updateConnectionStatus("reconnecting");
 }
 
 function handleReconnectFailed() {
   console.error("Reconnection failed");
-  updateConnectionStatus("disconnected");
   alert("Connection lost. Please refresh the page.");
   window.location.reload();
 }
@@ -163,6 +158,36 @@ function handleNewMessage(message) {
 function handleRoomDeleted() {
   alert("Room deleted by owner. Redirecting...");
   redirectToMainPage();
+}
+
+function handleLeaveRoomSuccess() {
+  redirectToMainPage();
+}
+
+/* ========== ROOM MANAGEMENT ========== */
+
+function handleLeaveRoom() {
+  if (confirm("Are you sure you want to leave the room?")) {
+    socket.emit("leave-room", currentRoomId, (response) => {
+      if (response?.status === "success") {
+        redirectToMainPage();
+      } else {
+        alert("Failed to leave room: " + (response?.message || "Unknown error"));
+      }
+    });
+  }
+}
+
+function handleDeleteRoom() {
+  if (confirm("Are you sure you want to delete this room? All messages will be lost.")) {
+    socket.emit("delete-room", currentRoomId, (response) => {
+      if (response?.status === "success") {
+        redirectToMainPage();
+      } else {
+        alert("Failed to delete room: " + (response?.message || "Unknown error"));
+      }
+    });
+  }
 }
 
 /* ========== MESSAGE FUNCTIONS ========== */
@@ -228,19 +253,6 @@ function updateUI() {
   ).style.display = "inline-block";
 }
 
-function updateConnectionStatus(status) {
-  const statusElement = document.getElementById("connection-status") || createStatusElement();
-  statusElement.className = `connection-status ${status}`;
-  statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function createStatusElement() {
-  const element = document.createElement("div");
-  element.id = "connection-status";
-  document.body.appendChild(element);
-  return element;
-}
-
 function showTemporaryMessage(text) {
   const chat = document.getElementById("chat");
   const msg = document.createElement("div");
@@ -297,17 +309,3 @@ function linkify(text) {
     ? text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank">${url}</a>`)
     : text;
 }
-
-/* ========== UI ACTION HANDLERS ========== */
-
-window.deleteRoom = () => {
-  if (confirm("Are you sure you want to delete this room?")) {
-    socket.emit("delete-room", currentRoomId, redirectToMainPage);
-  }
-};
-
-window.leaveRoom = () => {
-  if (confirm("Are you sure you want to leave the room?")) {
-    socket.emit("leave-room", currentRoomId, redirectToMainPage);
-  }
-};
