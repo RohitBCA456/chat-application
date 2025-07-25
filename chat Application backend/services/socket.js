@@ -1,44 +1,37 @@
-// services/socketService.js
 import { Server } from "socket.io";
 import { Message } from "../model/message.model.js";
 
 export const setupSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL,
+      origin: process.env.CLIENT_URL, // your frontend URL
       credentials: true,
     },
   });
 
   io.on("connection", (socket) => {
-    console.log("User connected", socket.id);
+    console.log("✅ User connected:", socket.id);
 
-    // Join a room and load previous messages
+    // 🔹 JOIN ROOM
     socket.on("join-room", async (roomId) => {
       try {
-        socket.join(roomId);
+        socket.join(roomId); // ✅ Join the socket.io room
+        socket.emit("joined-room"); // (Optional) Acknowledge join if needed on client
 
-        // Acknowledge join before sending messages
-        socket.emit("joined-room");
-
+        // 🔄 Fetch previous messages for this room
         const messages = await Message.find({ roomId }).sort({ timestamp: 1 });
 
-        // Now send messages
+        // 💬 Send chat history ONLY to the user who just joined
         socket.emit("load-messages", messages);
       } catch (error) {
-        console.error("Error loading messages:", error);
+        console.error("❌ Error loading messages:", error);
       }
     });
 
-    // Send a message to room
-    socket.on("send-message", async (data) => {
-      const { username, roomId, message } = data;
+    // 🔹 SEND MESSAGE
+    socket.on("send-message", async ({ username, roomId, message }) => {
       try {
-        // Ensure the sender is in the room (safety check)
-        if (!socket.rooms.has(roomId)) {
-          socket.join(roomId);
-        }
-
+        // 💾 Save the new message to DB
         const newMessage = new Message({
           roomId,
           sender: username,
@@ -54,17 +47,14 @@ export const setupSocket = (server) => {
           _id: newMessage._id,
         };
 
-        // Emit to everyone in the room except sender
-        socket.to(roomId).emit("receive-message", messagePayload);
-
-        // Emit to sender directly
-        socket.emit("receive-message", messagePayload);
+        // 📣 Emit to EVERYONE in the room — including the creator/sender
+        io.to(roomId).emit("receive-message", messagePayload);
       } catch (error) {
-        console.error("Error sending message:", error);
+        console.error("❌ Error sending message:", error);
       }
     });
 
-    // Edit a message in real-time
+    // ✏️ EDIT MESSAGE
     socket.on("edit-message", async ({ id, newText, roomId }) => {
       try {
         const message = await Message.findById(id);
@@ -72,32 +62,33 @@ export const setupSocket = (server) => {
           message.content = newText;
           await message.save({ validateBeforeSave: false });
 
+          // 📣 Broadcast to everyone in the room
           io.to(roomId).emit("message-edited", {
             id,
             newText,
           });
         }
       } catch (error) {
-        console.error("Error editing message:", error);
+        console.error("❌ Error editing message:", error);
       }
     });
 
-    // Delete a message in real-time
+    // 🗑️ DELETE MESSAGE
     socket.on("delete-message", async ({ id, roomId }) => {
       try {
         const deleted = await Message.findByIdAndDelete(id);
         if (deleted) {
+          // 📣 Inform everyone in the room
           io.to(roomId).emit("message-deleted", { id });
-          socket.emit("message-deleted", { id }); // Optional direct emit
         }
       } catch (error) {
-        console.error("Error deleting message:", error);
+        console.error("❌ Error deleting message:", error);
       }
     });
 
-    // Handle disconnect
+    // 🔌 Handle user disconnect
     socket.on("disconnect", () => {
-      console.log("User disconnected", socket.id);
+      console.log("👋 User disconnected:", socket.id);
     });
   });
 
