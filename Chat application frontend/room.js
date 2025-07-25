@@ -1,6 +1,7 @@
 // Global state management
 let socket;
 let isSocketReady = false;
+let currentUser = null;
 let roomJoined = false;
 const pendingMessages = new Set();
 const displayedMessages = new Set();
@@ -21,6 +22,7 @@ function initializeUserInterface() {
 
   const user = JSON.parse(userData);
   const { username, roomId, isOwner } = user;
+  currentUser = username;
 
   // Update UI elements
   document.getElementById(
@@ -127,14 +129,22 @@ function handleSocketError(errorMsg) {
 
 // Message display functions
 function displayMessage(user, text, timestamp = null, messageId = null) {
-  if (messageId && displayedMessages.has(messageId)) return;
-
-  const chat = document.getElementById("chat");
-
-  // Remove temporary message if exists
-  if (messageId && messageId.startsWith("temp-")) {
-    const existingTemp = document.querySelector(`[data-id="${messageId}"]`);
-    if (existingTemp) existingTemp.remove();
+  if (messageId && !messageId.startsWith("temp-")) {
+    // Try to find and replace the optimistic message
+    const tempId = "temp-" + Date.now(); // wrong logic
+    const existingTemp = [...displayedMessages].find((id) =>
+      id.startsWith("temp-")
+    );
+    if (existingTemp) {
+      const tempEl = document.querySelector(`[data-id="${existingTemp}"]`);
+      if (tempEl)
+        tempEl.replaceWith(
+          createMessageElement(user, text, timestamp, messageId)
+        );
+      displayedMessages.delete(existingTemp);
+      displayedMessages.add(messageId);
+      return;
+    }
   }
 
   const messageEl = createMessageElement(user, text, timestamp, messageId);
@@ -191,18 +201,17 @@ function createActionButtons(messageId, user) {
   const actionBtns = document.createElement("div");
   actionBtns.className = "action-buttons";
 
-  if (
-    user === document.getElementById("username").textContent &&
-    messageId &&
-    !messageId.startsWith("temp-")
-  ) {
+  if (user === currentUser && messageId && !messageId.startsWith("temp-")) {
     actionBtns.innerHTML += `
-      <button onclick="editMessage(this)" class="pop-up-btn edit-btn">Edit</button>
-      <button onclick="deleteMessage(this)" class="pop-up-btn delete-btn">Delete</button>
-    `;
+    <button onclick="editMessage(this)" class="pop-up-btn edit-btn">Edit</button>
+    <button onclick="deleteMessage(this)" class="pop-up-btn delete-btn">Delete</button>
+  `;
   }
 
-  actionBtns.innerHTML += `<button onclick="togglePin(this)" class="pop-up-btn pin-btn">Pin</button>`;
+  if (user !== currentUser && messageId && !messageId.startsWith("temp-")) {
+    actionBtns.innerHTML += `<button onclick="togglePin(this)" class="pop-up-btn pin-btn">Pin</button>`;
+  }
+
   return actionBtns;
 }
 
