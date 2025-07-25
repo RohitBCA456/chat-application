@@ -14,7 +14,6 @@ document.addEventListener("DOMContentLoaded", initializeChat);
 
 function initializeChat() {
   try {
-    // Load and validate user data
     const userData = localStorage.getItem("user");
     if (!userData) throw new Error("No user data found");
 
@@ -22,9 +21,9 @@ function initializeChat() {
     if (!currentUser?.roomId || !currentUser?.username) {
       throw new Error("Invalid user data");
     }
+
     currentRoomId = currentUser.roomId;
 
-    // Setup UI and connections
     updateUI();
     setupSocketConnection();
     setupEventListeners();
@@ -36,13 +35,11 @@ function initializeChat() {
 }
 
 function setupSocketConnection() {
-  // Cleanup previous connection if exists
   if (socket) {
     socket.removeAllListeners();
     socket.disconnect();
   }
 
-  // Configure new connection
   socket = io("https://chat-application-howg.onrender.com", {
     reconnection: true,
     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
@@ -58,31 +55,26 @@ function setupSocketConnection() {
     },
   });
 
-  // Connection event handlers
   socket.on("connect", handleConnect);
   socket.on("disconnect", handleDisconnect);
   socket.on("reconnect", handleReconnect);
   socket.on("reconnecting", handleReconnecting);
   socket.on("reconnect_failed", handleReconnectFailed);
 
-  // Message handlers
   socket.on("load-messages", handleLoadMessages);
   socket.on("new-message", handleNewMessage);
   socket.on("room-deleted", handleRoomDeleted);
   socket.on("leave-room-success", handleLeaveRoomSuccess);
 
-  // Heartbeat monitoring
   startHeartbeat();
   startLatencyMonitoring();
 }
 
 function setupEventListeners() {
-  // Message input handler
   document.getElementById("message").addEventListener("keypress", (e) => {
     if (e.key === "Enter") sendMessage();
   });
 
-  // Button event listeners
   document
     .getElementById("leave-room-btn")
     ?.addEventListener("click", handleLeaveRoom);
@@ -104,28 +96,21 @@ function handleConnect() {
         console.error("❌ Failed to join room after multiple attempts");
         return;
       }
-      console.warn(
-        "⚠️ Waiting for socket to become ready... Retrying join-room"
-      );
+      console.warn("⚠️ Waiting for socket to become ready... Retrying join-room");
       return setTimeout(() => tryJoinRoom(attempt + 1), 500);
     }
 
-    socket.emit(
-      "join-room",
-      currentRoomId,
-      currentUser.username,
-      (response) => {
-        if (response?.status === "success") {
-          console.log("✅ Successfully joined room");
-        } else {
-          console.error("Join room failed:", response?.message);
-          handleConnectionFailure();
-        }
+    socket.emit("join-room", currentRoomId, currentUser.username, (response) => {
+      if (response?.status === "success") {
+        console.log("✅ Successfully joined room");
+      } else {
+        console.error("Join room failed:", response?.message);
+        handleConnectionFailure();
       }
-    );
+    });
   };
 
-  tryJoinRoom(); // Start the retry loop
+  tryJoinRoom();
 }
 
 function handleDisconnect(reason) {
@@ -161,20 +146,16 @@ function handleLoadMessages(messages) {
 function handleNewMessage(message) {
   const chat = document.getElementById("chat");
 
-  // Check if this replaces a pending message
   if (message.tempId && pendingMessages.has(message.tempId)) {
     const tempEl = document.querySelector(`[data-id="${message.tempId}"]`);
     if (tempEl) {
       tempEl.dataset.id = message._id;
-      tempEl.querySelector(".timestamp").textContent = formatTime(
-        message.createdAt
-      );
+      tempEl.querySelector(".timestamp").textContent = formatTime(message.createdAt);
       pendingMessages.delete(message.tempId);
       return;
     }
   }
 
-  // Only add if new message and not from current user
   if (
     !document.querySelector(`[data-id="${message._id}"]`) &&
     message.sender !== currentUser.username
@@ -201,27 +182,19 @@ function handleLeaveRoom() {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
-        alert(
-          "Failed to leave room: " + (response?.message || "Unknown error")
-        );
+        alert("Failed to leave room: " + (response?.message || "Unknown error"));
       }
     });
   }
 }
 
 function handleDeleteRoom() {
-  if (
-    confirm(
-      "Are you sure you want to delete this room? All messages will be lost."
-    )
-  ) {
+  if (confirm("Are you sure you want to delete this room? All messages will be lost.")) {
     socket.emit("delete-room", currentRoomId, (response) => {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
-        alert(
-          "Failed to delete room: " + (response?.message || "Unknown error")
-        );
+        alert("Failed to delete room: " + (response?.message || "Unknown error"));
       }
     });
   }
@@ -230,7 +203,7 @@ function handleDeleteRoom() {
 /* ========== MESSAGE FUNCTIONS ========== */
 
 function sendMessage() {
-  if (!isSocketReady) {
+  if (!isSocketReady || !socket.connected) {
     showTemporaryMessage("Connecting... Please wait");
     return;
   }
@@ -239,7 +212,6 @@ function sendMessage() {
   const content = input.value.trim();
   if (!content) return;
 
-  // Create temporary message
   const tempId = "temp-" + Date.now();
   pendingMessages.set(tempId, true);
 
@@ -253,10 +225,10 @@ function sendMessage() {
       createdAt: new Date(),
     })
   );
+
   input.value = "";
   chat.scrollTop = chat.scrollHeight;
 
-  // Send to server with delivery tracking
   socket.emit(
     "send-message",
     {
@@ -278,13 +250,9 @@ function sendMessage() {
 function createMessageElement(message) {
   const isCurrentUser = message.sender === currentUser.username;
   return `
-    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${
-    message._id || message.tempId
-  }">
+    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${message._id || message.tempId}">
       <div class="message-content">
-        <p><strong>${message.sender}:</strong> <span>${linkify(
-    message.content
-  )}</span></p>
+        <p><strong>${message.sender}:</strong> <span>${linkify(message.content)}</span></p>
       </div>
       <div class="timestamp">${formatTime(message.createdAt)}</div>
     </div>
@@ -354,9 +322,6 @@ function formatTime(timestamp) {
 
 function linkify(text) {
   return typeof text === "string"
-    ? text.replace(
-        /(https?:\/\/[^\s]+)/g,
-        (url) => `<a href="${url}" target="_blank">${url}</a>`
-      )
+    ? text.replace(/(https?:\/\/[^\s]+)/g, (url) => `<a href="${url}" target="_blank">${url}</a>`)
     : text;
 }
