@@ -24,9 +24,9 @@ async function createRoom() {
         isOwner: true,
       })
     );
-
-    // 👉 Redirect to room.html with roomId as query param
-    window.location.href = `room.html?room=${createData.roomId}`;
+    setTimeout(() => {
+      window.location.href = `room.html?room=${createData.roomId}`;
+    }, 300); // 300ms delay gives server time to fully register the room
   } catch (error) {
     console.error("❌ Create Room Error:", error);
     alert("Something went wrong while creating room.");
@@ -70,7 +70,9 @@ async function joinRoom() {
 // 📋 Function to fetch and display all available rooms
 async function fetchRooms() {
   try {
-    const res = await fetch("https://chat-application-howg.onrender.com/room/getallroom");
+    const res = await fetch(
+      "https://chat-application-howg.onrender.com/room/getallroom"
+    );
     const rooms = await res.json();
 
     const roomContainer = document.getElementById("roomContainer");

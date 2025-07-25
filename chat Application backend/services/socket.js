@@ -31,7 +31,6 @@ export const setupSocket = (server) => {
     // 🔹 SEND MESSAGE
     socket.on("send-message", async ({ username, roomId, message }) => {
       try {
-        // 💾 Save the new message to DB
         const newMessage = new Message({
           roomId,
           sender: username,
@@ -40,17 +39,17 @@ export const setupSocket = (server) => {
 
         await newMessage.save();
 
-        const messagePayload = {
+        const payload = {
           username,
           message,
           timestamp: newMessage.timestamp,
           _id: newMessage._id,
         };
 
-        // 📣 Emit to EVERYONE in the room — including the creator/sender
-        io.to(roomId).emit("receive-message", messagePayload);
-      } catch (error) {
-        console.error("❌ Error sending message:", error);
+        // ✅ Broadcast to everyone including creator
+        io.to(roomId).emit("receive-message", payload);
+      } catch (err) {
+        console.error("Send message error:", err);
       }
     });
 

@@ -7,25 +7,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const { username, roomId, isOwner } = JSON.parse(userData);
 
-  // Display room and user info
-  document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
-  document.getElementById(
-    isOwner ? "delete-room-btn" : "leave-room-btn"
-  ).style.display = "inline-block";
+  document.getElementById("room-id").textContent = roomId;
+  document.getElementById(isOwner ? "delete-room-btn" : "leave-room-btn").style.display = "inline-block";
 
-  // ✅ Connect to Socket.IO
-  socket = io("https://chat-application-howg.onrender.com");
+  // ✅ Connect to server
+  socket = io("https://chat-application-howg.onrender.com", {
+    transports: ["websocket"], // Enforce WebSocket only
+  });
 
-  // ✅ Wait for socket to connect before emitting join-room
+  // 🧠 Debug every incoming socket event
+  socket.onAny((event, ...args) => {
+    console.log("📡 SOCKET EVENT:", event, args);
+  });
+
+  // ✅ After connection is established, join the room
   socket.on("connect", () => {
-    console.log("✅ Socket connected. Emitting join-room");
+    console.log("🔗 Socket connected:", socket.id);
     socket.emit("join-room", roomId);
   });
 
-  // ✅ Receive load-messages
+  // ✅ Message history loaded from backend
   socket.on("load-messages", (messages) => {
-    console.log("📦 Received messages:", messages);
+    console.log("📦 Message history loaded:", messages);
     const chat = document.getElementById("chat");
     chat.innerHTML = "";
     messages.forEach(({ sender, content, timestamp, _id }) => {
@@ -33,12 +37,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ✅ Real-time message receive
+  // ✅ Real-time messages
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
   });
 
-  // ✏️ Real-time message editing
   socket.on("message-edited", ({ id, newText }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
@@ -47,22 +50,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ❌ Real-time message deletion
   socket.on("message-deleted", ({ id }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) messageCard.remove();
   });
 
-  // 🚀 Send a message
-  window.sendMessage = function () {
+  // 📨 Send message
+  window.sendMessage = () => {
     const input = document.getElementById("message");
     const message = input.value.trim();
     if (!message) return;
-
-    socket.emit("send-message", { roomId, username, message });
-    input.value = ""; // Clear input field
+    socket.emit("send-message", { username, roomId, message });
+    input.value = "";
   };
 });
+
 
 // 🔗 Convert URLs in messages into clickable links
 function linkify(text) {
