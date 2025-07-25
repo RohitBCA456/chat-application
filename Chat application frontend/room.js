@@ -96,18 +96,25 @@ function handleConnect() {
         console.error("❌ Failed to join room after multiple attempts");
         return;
       }
-      console.warn("⚠️ Waiting for socket to become ready... Retrying join-room");
+      console.warn(
+        "⚠️ Waiting for socket to become ready... Retrying join-room"
+      );
       return setTimeout(() => tryJoinRoom(attempt + 1), 500);
     }
 
-    socket.emit("join-room", currentRoomId, currentUser.username, (response) => {
-      if (response?.status === "success") {
-        console.log("✅ Successfully joined room");
-      } else {
-        console.error("Join room failed:", response?.message);
-        handleConnectionFailure();
+    socket.emit(
+      "join-room",
+      currentRoomId,
+      currentUser.username,
+      (response) => {
+        if (response?.status === "success") {
+          console.log("✅ Successfully joined room");
+        } else {
+          console.error("Join room failed:", response?.message);
+          handleConnectionFailure();
+        }
       }
-    });
+    );
   };
 
   tryJoinRoom();
@@ -150,7 +157,9 @@ function handleNewMessage(message) {
     const tempEl = document.querySelector(`[data-id="${message.tempId}"]`);
     if (tempEl) {
       tempEl.dataset.id = message._id;
-      tempEl.querySelector(".timestamp").textContent = formatTime(message.createdAt);
+      tempEl.querySelector(".timestamp").textContent = formatTime(
+        message.createdAt
+      );
       pendingMessages.delete(message.tempId);
       return;
     }
@@ -166,8 +175,17 @@ function handleNewMessage(message) {
 }
 
 function handleRoomDeleted() {
-  alert("Room deleted by owner. Redirecting...");
-  redirectToMainPage();
+  if (confirm("Are you sure you want to delete the room?")) {
+    socket.emit("delete-room", currentRoomId, (response) => {
+      if (response?.status === "success") {
+        redirectToMainPage();
+      } else {
+        alert(
+          "Failed to delete room: " + (response?.message || "Unknown error")
+        );
+      }
+    });
+  }
 }
 
 function handleLeaveRoomSuccess() {
@@ -182,19 +200,27 @@ function handleLeaveRoom() {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
-        alert("Failed to leave room: " + (response?.message || "Unknown error"));
+        alert(
+          "Failed to leave room: " + (response?.message || "Unknown error")
+        );
       }
     });
   }
 }
 
 function handleDeleteRoom() {
-  if (confirm("Are you sure you want to delete this room? All messages will be lost.")) {
+  if (
+    confirm(
+      "Are you sure you want to delete this room? All messages will be lost."
+    )
+  ) {
     socket.emit("delete-room", currentRoomId, (response) => {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
-        alert("Failed to delete room: " + (response?.message || "Unknown error"));
+        alert(
+          "Failed to delete room: " + (response?.message || "Unknown error")
+        );
       }
     });
   }
@@ -250,9 +276,13 @@ function sendMessage() {
 function createMessageElement(message) {
   const isCurrentUser = message.sender === currentUser.username;
   return `
-    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${message._id || message.tempId}">
+    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${
+    message._id || message.tempId
+  }">
       <div class="message-content">
-        <p><strong>${message.sender}:</strong> <span>${linkify(message.content)}</span></p>
+        <p><strong>${message.sender}:</strong> <span>${linkify(
+    message.content
+  )}</span></p>
       </div>
       <div class="timestamp">${formatTime(message.createdAt)}</div>
     </div>
@@ -322,6 +352,9 @@ function formatTime(timestamp) {
 
 function linkify(text) {
   return typeof text === "string"
-    ? text.replace(/(https?:\/\/[^\s]+)/g, (url) => `<a href="${url}" target="_blank">${url}</a>`)
+    ? text.replace(
+        /(https?:\/\/[^\s]+)/g,
+        (url) => `<a href="${url}" target="_blank">${url}</a>`
+      )
     : text;
 }
