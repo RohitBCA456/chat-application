@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeChat();
 });
 
-function initializeChat() {
+async function initializeChat() {
   const userData = localStorage.getItem("user");
   if (!userData) {
     alert("User not found. Redirecting to main page.");
@@ -28,7 +28,9 @@ function initializeChat() {
     currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
 
-  await fetchMessageHistory(currentRoomId);
+  
+
+ await fetchMessageHistory(currentRoomId);
 
   // Then setup socket connection
   setupSocketConnection();
@@ -66,18 +68,6 @@ async function fetchMessageHistory(roomId) {
     console.error("Error fetching message history:", error);
     alert("Failed to load message history. Trying socket connection...");
   }
-}
-
-
-  // Setup socket connection
-  setupSocketConnection();
-
-  // Message input handler
-  document.getElementById("message").addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
-      sendMessage();
-    }
-  });
 }
 
 function setupSocketConnection() {
