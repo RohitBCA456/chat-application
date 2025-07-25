@@ -54,7 +54,11 @@ export const setupSocket = (server) => {
           _id: newMessage._id,
         };
 
-        io.to(roomId).emit("receive-message", messagePayload); // send to all in room including sender
+        // Emit to everyone in the room except sender
+        socket.to(roomId).emit("receive-message", messagePayload);
+
+        // Emit to sender directly
+        socket.emit("receive-message", messagePayload);
       } catch (error) {
         console.error("Error sending message:", error);
       }

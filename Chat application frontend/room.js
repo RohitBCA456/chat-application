@@ -14,7 +14,6 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
-
   // ✅ Join the room and fetch messages after connection established
   // Ensure socket is connected before emitting
   function waitForSocketConnection(callback) {
@@ -70,8 +69,10 @@ document.addEventListener("DOMContentLoaded", () => {
     socket.emit("send-message", { roomId, username, message });
     input.value = "";
 
-    // Fallback to re-fetch in case delivery fails
-    setTimeout(() => fetchMessageHistoryAndRender(roomId), 500);
+    // Force full reload after sending
+    setTimeout(() => {
+      location.reload(); // refresh the whole page
+    }, 500); // Give server some time to process
   };
 });
 
