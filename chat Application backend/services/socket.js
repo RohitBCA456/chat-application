@@ -8,91 +8,92 @@ export const setupSocket = (server) => {
       origin: process.env.CLIENT_URL,
       credentials: true,
     },
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 2 * 60 * 1000,
+      skipMiddlewares: true,
+    }
   });
 
   io.on("connection", (socket) => {
-    console.log("Socket connected:", socket.id);
-
-    // Track room memberships
+    console.log("✅ New connection:", socket.id);
     const userRooms = new Set();
 
-    // Join specific room
+    // Join room handler
     socket.on("join-room", async (roomId, username, callback = () => {}) => {
       try {
-        // Leave all previous rooms
-        userRooms.forEach(room => {
-          socket.leave(room);
-          userRooms.delete(room);
+        // Validate room exists
+        const roomExists = await Room.exists({ roomId });
+        if (!roomExists) throw new Error("Room doesn't exist");
+
+        // Leave previous rooms
+        userRooms.forEach(r => {
+          socket.leave(r);
+          userRooms.delete(r);
         });
 
-        socket.join(roomId);
+        // Join new room
+        await socket.join(roomId);
         userRooms.add(roomId);
+        console.log(`👤 ${username} joined ${roomId}`);
 
+        // Load messages
         const messages = await Message.find({ roomId })
           .sort({ createdAt: 1 })
           .limit(100);
         
         callback({ status: "success" });
-        socket.emit("load-messages", messages.map(msg => ({
-          _id: msg._id,
-          content: msg.content,
-          sender: msg.sender,
-          createdAt: msg.createdAt
-        })));
+        socket.emit("load-messages", messages);
       } catch (error) {
-        console.error("Join room error:", error);
+        console.error("Join error:", error.message);
         callback({ status: "error", message: error.message });
       }
     });
 
-    // Send new message
-    socket.on("send-message", async ({ content, roomId, username }, callback = () => {}) => {
+    // Message handler
+    socket.on("send-message", async ({ content, roomId, username, tempId }, callback = () => {}) => {
       try {
-        if (!content || !roomId || !username) {
-          throw new Error("Missing required fields");
+        if (!content?.trim() || !roomId || !username) {
+          throw new Error("Invalid message data");
         }
 
+        // Verify user is in the room
+        if (!userRooms.has(roomId)) {
+          throw new Error("Not in room");
+        }
+
+        // Create and save message
         const newMessage = new Message({ 
-          content, 
+          content: content.trim(), 
           roomId, 
           sender: username 
         });
-        
         await newMessage.save();
+
+        // Broadcast with both IDs for reconciliation
         io.to(roomId).emit("new-message", {
-          _id: newMessage._id,
-          content: newMessage.content,
-          sender: newMessage.sender,
-          createdAt: newMessage.createdAt
+          ...newMessage.toObject(),
+          tempId // Include tempId for sender
         });
-        
+
         callback({ status: "success" });
       } catch (error) {
-        console.error("Send message error:", error);
+        console.error("Send error:", error.message);
         callback({ status: "error", message: error.message });
       }
     });
 
-    // Delete room
+    // Room management
     socket.on("delete-room", async (roomId, callback = () => {}) => {
       try {
-        // Delete all messages in the room
         await Message.deleteMany({ roomId });
-        
-        // Delete the room itself
-        await Room.deleteOne({ roomId: roomId });
-        
-        // Notify all clients in the room
+        await Room.deleteOne({ roomId });
         io.to(roomId).emit("room-deleted");
-        
         callback({ status: "success" });
       } catch (error) {
-        console.error("Delete room error:", error);
         callback({ status: "error", message: error.message });
       }
     });
 
-    // Leave room
     socket.on("leave-room", (roomId, callback = () => {}) => {
       try {
         socket.leave(roomId);
@@ -103,8 +104,9 @@ export const setupSocket = (server) => {
       }
     });
 
+    // Cleanup
     socket.on("disconnect", () => {
-      console.log("Socket disconnected:", socket.id);
+      console.log("❌ Disconnected:", socket.id);
       userRooms.clear();
     });
   });
