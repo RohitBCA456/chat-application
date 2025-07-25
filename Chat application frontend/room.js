@@ -17,7 +17,7 @@ function initializeChat() {
     // Load and validate user data
     const userData = localStorage.getItem("user");
     if (!userData) throw new Error("No user data found");
-    
+
     currentUser = JSON.parse(userData);
     if (!currentUser?.roomId || !currentUser?.username) {
       throw new Error("Invalid user data");
@@ -28,7 +28,6 @@ function initializeChat() {
     updateUI();
     setupSocketConnection();
     setupEventListeners();
-
   } catch (error) {
     console.error("Initialization error:", error);
     alert("Error initializing chat: " + error.message);
@@ -51,12 +50,12 @@ function setupSocketConnection() {
     reconnectionDelayMax: 10000,
     randomizationFactor: 0.5,
     timeout: 20000,
-    transports: ['websocket', 'polling'],
+    transports: ["websocket", "polling"],
     auth: {
       username: currentUser.username,
       roomId: currentRoomId,
-      lastDisconnect: performance.now()
-    }
+      lastDisconnect: performance.now(),
+    },
   });
 
   // Connection event handlers
@@ -65,7 +64,7 @@ function setupSocketConnection() {
   socket.on("reconnect", handleReconnect);
   socket.on("reconnecting", handleReconnecting);
   socket.on("reconnect_failed", handleReconnectFailed);
-  
+
   // Message handlers
   socket.on("load-messages", handleLoadMessages);
   socket.on("new-message", handleNewMessage);
@@ -84,8 +83,12 @@ function setupEventListeners() {
   });
 
   // Button event listeners
-  document.getElementById("leave-room-btn")?.addEventListener("click", handleLeaveRoom);
-  document.getElementById("delete-room-btn")?.addEventListener("click", handleDeleteRoom);
+  document
+    .getElementById("leave-room-btn")
+    ?.addEventListener("click", handleLeaveRoom);
+  document
+    .getElementById("delete-room-btn")
+    ?.addEventListener("click", handleDeleteRoom);
 }
 
 /* ========== SOCKET EVENT HANDLERS ========== */
@@ -94,19 +97,41 @@ function handleConnect() {
   console.log("✅ Connected to server with ID:", socket.id);
   isSocketReady = true;
   reconnectAttempts = 0;
-  
-  socket.emit("join-room", currentRoomId, currentUser.username, (response) => {
-    if (response?.status !== "success") {
-      console.error("Join room failed:", response?.message);
-      handleConnectionFailure();
+
+  const tryJoinRoom = (attempt = 1) => {
+    if (!socket.connected || !currentRoomId || !currentUser?.username) {
+      if (attempt > 5) {
+        console.error("❌ Failed to join room after multiple attempts");
+        return;
+      }
+      console.warn(
+        "⚠️ Waiting for socket to become ready... Retrying join-room"
+      );
+      return setTimeout(() => tryJoinRoom(attempt + 1), 500);
     }
-  });
+
+    socket.emit(
+      "join-room",
+      currentRoomId,
+      currentUser.username,
+      (response) => {
+        if (response?.status === "success") {
+          console.log("✅ Successfully joined room");
+        } else {
+          console.error("Join room failed:", response?.message);
+          handleConnectionFailure();
+        }
+      }
+    );
+  };
+
+  tryJoinRoom(); // Start the retry loop
 }
 
 function handleDisconnect(reason) {
   console.log("Disconnected:", reason);
   isSocketReady = false;
-  
+
   if (reason === "io server disconnect") {
     setTimeout(() => socket.connect(), 1000);
   }
@@ -129,27 +154,31 @@ function handleReconnectFailed() {
 
 function handleLoadMessages(messages) {
   const chat = document.getElementById("chat");
-  chat.innerHTML = messages.map(msg => createMessageElement(msg)).join("");
+  chat.innerHTML = messages.map((msg) => createMessageElement(msg)).join("");
   chat.scrollTop = chat.scrollHeight;
 }
 
 function handleNewMessage(message) {
   const chat = document.getElementById("chat");
-  
+
   // Check if this replaces a pending message
   if (message.tempId && pendingMessages.has(message.tempId)) {
     const tempEl = document.querySelector(`[data-id="${message.tempId}"]`);
     if (tempEl) {
       tempEl.dataset.id = message._id;
-      tempEl.querySelector(".timestamp").textContent = formatTime(message.createdAt);
+      tempEl.querySelector(".timestamp").textContent = formatTime(
+        message.createdAt
+      );
       pendingMessages.delete(message.tempId);
       return;
     }
   }
-  
+
   // Only add if new message and not from current user
-  if (!document.querySelector(`[data-id="${message._id}"]`) && 
-      message.sender !== currentUser.username) {
+  if (
+    !document.querySelector(`[data-id="${message._id}"]`) &&
+    message.sender !== currentUser.username
+  ) {
     chat.insertAdjacentHTML("beforeend", createMessageElement(message));
     chat.scrollTop = chat.scrollHeight;
   }
@@ -172,19 +201,27 @@ function handleLeaveRoom() {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
-        alert("Failed to leave room: " + (response?.message || "Unknown error"));
+        alert(
+          "Failed to leave room: " + (response?.message || "Unknown error")
+        );
       }
     });
   }
 }
 
 function handleDeleteRoom() {
-  if (confirm("Are you sure you want to delete this room? All messages will be lost.")) {
+  if (
+    confirm(
+      "Are you sure you want to delete this room? All messages will be lost."
+    )
+  ) {
     socket.emit("delete-room", currentRoomId, (response) => {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
-        alert("Failed to delete room: " + (response?.message || "Unknown error"));
+        alert(
+          "Failed to delete room: " + (response?.message || "Unknown error")
+        );
       }
     });
   }
@@ -205,38 +242,49 @@ function sendMessage() {
   // Create temporary message
   const tempId = "temp-" + Date.now();
   pendingMessages.set(tempId, true);
-  
+
   const chat = document.getElementById("chat");
-  chat.insertAdjacentHTML("beforeend", createMessageElement({
-    _id: tempId,
-    sender: currentUser.username,
-    content,
-    createdAt: new Date()
-  }));
+  chat.insertAdjacentHTML(
+    "beforeend",
+    createMessageElement({
+      _id: tempId,
+      sender: currentUser.username,
+      content,
+      createdAt: new Date(),
+    })
+  );
   input.value = "";
   chat.scrollTop = chat.scrollHeight;
 
   // Send to server with delivery tracking
-  socket.emit("send-message", {
-    content,
-    roomId: currentRoomId,
-    username: currentUser.username,
-    tempId
-  }, (response) => {
-    if (response?.status === "failed") {
-      document.querySelector(`[data-id="${tempId}"]`)?.remove();
-      pendingMessages.delete(tempId);
-      showTemporaryMessage("Failed to send: " + response.message);
+  socket.emit(
+    "send-message",
+    {
+      content,
+      roomId: currentRoomId,
+      username: currentUser.username,
+      tempId,
+    },
+    (response) => {
+      if (response?.status === "failed") {
+        document.querySelector(`[data-id="${tempId}"]`)?.remove();
+        pendingMessages.delete(tempId);
+        showTemporaryMessage("Failed to send: " + response.message);
+      }
     }
-  });
+  );
 }
 
 function createMessageElement(message) {
   const isCurrentUser = message.sender === currentUser.username;
   return `
-    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${message._id || message.tempId}">
+    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${
+    message._id || message.tempId
+  }">
       <div class="message-content">
-        <p><strong>${message.sender}:</strong> <span>${linkify(message.content)}</span></p>
+        <p><strong>${message.sender}:</strong> <span>${linkify(
+    message.content
+  )}</span></p>
       </div>
       <div class="timestamp">${formatTime(message.createdAt)}</div>
     </div>
@@ -298,14 +346,17 @@ function redirectToMainPage() {
 }
 
 function formatTime(timestamp) {
-  return new Date(timestamp).toLocaleTimeString([], { 
-    hour: "2-digit", 
-    minute: "2-digit" 
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
 function linkify(text) {
-  return typeof text === "string" 
-    ? text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank">${url}</a>`)
+  return typeof text === "string"
+    ? text.replace(
+        /(https?:\/\/[^\s]+)/g,
+        (url) => `<a href="${url}" target="_blank">${url}</a>`
+      )
     : text;
 }
