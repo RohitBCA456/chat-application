@@ -63,7 +63,7 @@ export const setupSocket = (server) => {
     socket.on("send-message", async (data) => {
       const { roomId, username, message, tempId } = data;
 
-      if (!userRooms.has(roomId)) {
+      if (!roomMembers.has(roomId) || !roomMembers.get(roomId).has(username)) {
         return socket.emit("error", "You must join the room first");
       }
 
@@ -81,7 +81,7 @@ export const setupSocket = (server) => {
           message,
           timestamp: newMessage.timestamp,
           _id: newMessage._id,
-          tempId, // Include the tempId in the response
+          tempId,
         };
 
         io.to(roomId).emit("receive-message", messagePayload);
