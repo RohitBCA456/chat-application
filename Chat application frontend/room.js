@@ -45,7 +45,7 @@ async function initializeChat() {
 
 async function fetchMessageHistory(roomId) {
   try {
-    const response = await fetch(`https://chat-application-howg.onrender.com//message/messages/${roomId}`);
+    const response = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
     if (!response.ok) throw new Error("Failed to fetch messages");
     
     const data = await response.json();
