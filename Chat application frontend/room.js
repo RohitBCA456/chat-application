@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
   socket = io("https://chat-application-howg.onrender.com", {
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
-    autoConnect: true
+    autoConnect: true,
   });
 
   // Socket event handlers
@@ -85,6 +85,87 @@ document.addEventListener("DOMContentLoaded", () => {
     clearTimeout(fallbackTimer);
   });
 });
+
+// ... (keep all your existing code above) ...
+
+// ✅ Send message function
+window.sendMessage = function () {
+  // Get user data
+  const userData = localStorage.getItem("user");
+  if (!userData) {
+    alert("Session expired. Please rejoin the room.");
+    window.location.href = "mainPage.html";
+    return;
+  }
+
+  const user = JSON.parse(userData);
+  const { username, roomId } = user;
+  const input = document.getElementById("message");
+  const message = input.value.trim();
+
+  // Validate input
+  if (!message) return;
+  if (!socket || !socket.connected) {
+    alert("Connection lost. Trying to reconnect...");
+    socket.connect();
+    return;
+  }
+
+  // Optimistic UI update (temporary display)
+  const tempId = "temp-" + Date.now();
+  displayMessage(username, message, new Date(), tempId);
+  input.value = "";
+  input.focus();
+
+  // Send via socket
+  socket.emit(
+    "send-message",
+    {
+      roomId,
+      username,
+      message,
+    },
+    (ack) => {
+      // Handle acknowledgment from server
+      if (ack && ack.error) {
+        console.error("Send failed:", ack.error);
+        // Remove the optimistic message if failed
+        const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+        if (tempMsg) tempMsg.remove();
+        alert("Failed to send: " + ack.error);
+      }
+      // If success, the server will send the real message which will replace our temp one
+    }
+  );
+
+  // Fallback to HTTP after 2 seconds if no response
+  const fallbackTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(
+        `https://chat-application-howg.onrender.com/message/send`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ roomId, username, message }),
+        }
+      );
+
+      if (!res.ok) throw new Error("HTTP send failed");
+      console.log("Message sent via HTTP fallback");
+    } catch (error) {
+      console.error("Fallback failed:", error);
+      const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+      if (tempMsg) tempMsg.remove();
+      alert("Message failed to send. Please try again.");
+    }
+  }, 2000);
+
+  // Cancel fallback if socket responds
+  socket.once("receive-message", () => clearTimeout(fallbackTimer));
+};
+
+// ... (rest of your existing code below) ...
 
 // ... rest of your room.js code remains the same ...
 // ✅ Make URLs clickable in messages
