@@ -190,29 +190,9 @@ function createMessageElement(user, text, timestamp, messageId) {
   ts.className = "timestamp";
   ts.textContent = time;
 
-  const actionBtns = createActionButtons(messageId, user);
-  content.appendChild(actionBtns);
   messageEl.append(content, ts);
 
   return messageEl;
-}
-
-function createActionButtons(messageId, user) {
-  const actionBtns = document.createElement("div");
-  actionBtns.className = "action-buttons";
-
-  if (user === currentUser && messageId && !messageId.startsWith("temp-")) {
-    actionBtns.innerHTML += `
-    <button onclick="editMessage(this)" class="pop-up-btn edit-btn">Edit</button>
-    <button onclick="deleteMessage(this)" class="pop-up-btn delete-btn">Delete</button>
-  `;
-  }
-
-  if (user !== currentUser && messageId && !messageId.startsWith("temp-")) {
-    actionBtns.innerHTML += `<button onclick="togglePin(this)" class="pop-up-btn pin-btn">Pin</button>`;
-  }
-
-  return actionBtns;
 }
 
 // Message operations
@@ -255,88 +235,88 @@ window.sendMessage = function () {
   );
 };
 
-window.editMessage = function (btn) {
-  const messageCard = btn.closest(".message");
-  const messageId = messageCard.dataset.id;
-  const roomId = document.getElementById("room-id").textContent;
-  const username = document.getElementById("username").textContent;
+// window.editMessage = function (btn) {
+//   const messageCard = btn.closest(".message");
+//   const messageId = messageCard.dataset.id;
+//   const roomId = document.getElementById("room-id").textContent;
+//   const username = document.getElementById("username").textContent;
 
-  const span = messageCard.querySelector(".message-content span");
-  const oldText = span.textContent.trim();
+//   const span = messageCard.querySelector(".message-content span");
+//   const oldText = span.textContent.trim();
 
-  if (messageCard.querySelector("input.edit-input")) return;
+//   if (messageCard.querySelector("input.edit-input")) return;
 
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = oldText;
-  input.className = "edit-input";
-  span.replaceWith(input);
-  input.focus();
+//   const input = document.createElement("input");
+//   input.type = "text";
+//   input.value = oldText;
+//   input.className = "edit-input";
+//   span.replaceWith(input);
+//   input.focus();
 
-  btn.textContent = "Save";
-  btn.onclick = () => saveEdit();
+//   btn.textContent = "Save";
+//   btn.onclick = () => saveEdit();
 
-  function saveEdit() {
-    const newText = input.value.trim();
-    if (!newText || newText === oldText) {
-      cancelEdit();
-      return;
-    }
+//   function saveEdit() {
+//     const newText = input.value.trim();
+//     if (!newText || newText === oldText) {
+//       cancelEdit();
+//       return;
+//     }
 
-    socket.emit(
-      "edit-message",
-      { id: messageId, newText, roomId, username },
-      (response) => {
-        if (response?.status === "error") {
-          alert("Failed to edit: " + response.message);
-          cancelEdit();
-        }
-      }
-    );
+//     socket.emit(
+//       "edit-message",
+//       { id: messageId, newText, roomId, username },
+//       (response) => {
+//         if (response?.status === "error") {
+//           alert("Failed to edit: " + response.message);
+//           cancelEdit();
+//         }
+//       }
+//     );
 
-    const updatedSpan = document.createElement("span");
-    updatedSpan.innerHTML = linkify(newText);
-    input.replaceWith(updatedSpan);
+//     const updatedSpan = document.createElement("span");
+//     updatedSpan.innerHTML = linkify(newText);
+//     input.replaceWith(updatedSpan);
 
-    btn.textContent = "Edit";
-    btn.onclick = () => window.editMessage(btn);
-  }
+//     btn.textContent = "Edit";
+//     btn.onclick = () => window.editMessage(btn);
+//   }
 
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") saveEdit();
-    if (e.key === "Escape") cancelEdit();
-  });
+//   input.addEventListener("keydown", (e) => {
+//     if (e.key === "Enter") saveEdit();
+//     if (e.key === "Escape") cancelEdit();
+//   });
 
-  function cancelEdit() {
-    input.replaceWith(span);
-    btn.textContent = "Edit";
-    btn.onclick = () => window.editMessage(btn);
-  }
-};
+//   function cancelEdit() {
+//     input.replaceWith(span);
+//     btn.textContent = "Edit";
+//     btn.onclick = () => window.editMessage(btn);
+//   }
+// };
 
-window.deleteMessage = function (btn) {
-  const messageCard = btn.closest(".message");
-  const messageId = messageCard.dataset.id;
-  const roomId = document.getElementById("room-id").textContent;
-  const username = document.getElementById("username").textContent;
+// window.deleteMessage = function (btn) {
+//   const messageCard = btn.closest(".message");
+//   const messageId = messageCard.dataset.id;
+//   const roomId = document.getElementById("room-id").textContent;
+//   const username = document.getElementById("username").textContent;
 
-  if (!confirm("Are you sure you want to delete this message?")) return;
+//   if (!confirm("Are you sure you want to delete this message?")) return;
 
-  btn.disabled = true;
-  btn.textContent = "Deleting...";
+//   btn.disabled = true;
+//   btn.textContent = "Deleting...";
 
-  socket.emit(
-    "delete-message",
-    { id: messageId, roomId, username },
-    (response) => {
-      if (response?.status === "error") {
-        btn.disabled = false;
-        btn.textContent = "Delete";
-        alert("Failed to delete: " + response.message);
-      }
-    }
-  );
-};
+//   socket.emit(
+//     "delete-message",
+//     { id: messageId, roomId, username },
+//     (response) => {
+//       if (response?.status === "error") {
+//         btn.disabled = false;
+//         btn.textContent = "Delete";
+//         alert("Failed to delete: " + response.message);
+//       }
+//     }
+//   );
+// };
 
 // Utility functions
 function linkify(text) {
