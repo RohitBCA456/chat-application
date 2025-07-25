@@ -1,68 +1,70 @@
 // 🌐 Declare socket as a global variable
 let socket;
-const userData = localStorage.getItem("user");
-if (!userData) return alert("User not found");
+document.addEventListener("DOMContentLoaded", () => {
+  const userData = localStorage.getItem("user");
+  if (!userData) return alert("User not found");
 
-const { username, roomId, isOwner } = JSON.parse(userData);
+  const { username, roomId, isOwner } = JSON.parse(userData);
 
-document.getElementById("username").textContent = username;
-document.getElementById("room-id").textContent = roomId;
-document.getElementById(
-  isOwner ? "delete-room-btn" : "leave-room-btn"
-).style.display = "inline-block";
+  document.getElementById("username").textContent = username;
+  document.getElementById("room-id").textContent = roomId;
+  document.getElementById(
+    isOwner ? "delete-room-btn" : "leave-room-btn"
+  ).style.display = "inline-block";
 
-// ✅ Connect to server
-socket = io("https://chat-application-howg.onrender.com", {
-  transports: ["websocket"], // Enforce WebSocket only
-});
-
-// 🧠 Debug every incoming socket event
-socket.onAny((event, ...args) => {
-  console.log("📡 SOCKET EVENT:", event, args);
-});
-
-// ✅ After connection is established, join the room
-socket.on("connect", () => {
-  console.log("🔗 Socket connected:", socket.id);
-  socket.emit("join-room", roomId);
-});
-
-// ✅ Message history loaded from backend
-socket.on("load-messages", (messages) => {
-  console.log("📦 Message history loaded:", messages);
-  const chat = document.getElementById("chat");
-  chat.innerHTML = "";
-  messages.forEach(({ sender, content, timestamp, _id }) => {
-    displayMessage(sender, content, timestamp, _id);
+  // ✅ Connect to server
+  socket = io("https://chat-application-howg.onrender.com", {
+    transports: ["websocket"], // Enforce WebSocket only
   });
-});
 
-// ✅ Real-time messages
-socket.on("receive-message", ({ username, message, timestamp, _id }) => {
-  displayMessage(username, message, timestamp, _id);
-});
+  // 🧠 Debug every incoming socket event
+  socket.onAny((event, ...args) => {
+    console.log("📡 SOCKET EVENT:", event, args);
+  });
 
-socket.on("message-edited", ({ id, newText }) => {
-  const messageCard = document.querySelector(`[data-id="${id}"]`);
-  if (messageCard) {
-    const span = messageCard.querySelector(".message-content span");
-    if (span) span.innerHTML = linkify(newText);
-  }
-});
+  // ✅ After connection is established, join the room
+  socket.on("connect", () => {
+    console.log("🔗 Socket connected:", socket.id);
+    socket.emit("join-room", roomId);
+  });
 
-socket.on("message-deleted", ({ id }) => {
-  const messageCard = document.querySelector(`[data-id="${id}"]`);
-  if (messageCard) messageCard.remove();
-});
+  // ✅ Message history loaded from backend
+  socket.on("load-messages", (messages) => {
+    console.log("📦 Message history loaded:", messages);
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+    messages.forEach(({ sender, content, timestamp, _id }) => {
+      displayMessage(sender, content, timestamp, _id);
+    });
+  });
 
-// 📨 Send message
-window.sendMessage = () => {
-  const input = document.getElementById("message");
-  const message = input.value.trim();
-  if (!message) return;
-  socket.emit("send-message", { username, roomId, message });
-  input.value = "";
-};
+  // ✅ Real-time messages
+  socket.on("receive-message", ({ username, message, timestamp, _id }) => {
+    displayMessage(username, message, timestamp, _id);
+  });
+
+  socket.on("message-edited", ({ id, newText }) => {
+    const messageCard = document.querySelector(`[data-id="${id}"]`);
+    if (messageCard) {
+      const span = messageCard.querySelector(".message-content span");
+      if (span) span.innerHTML = linkify(newText);
+    }
+  });
+
+  socket.on("message-deleted", ({ id }) => {
+    const messageCard = document.querySelector(`[data-id="${id}"]`);
+    if (messageCard) messageCard.remove();
+  });
+
+  // 📨 Send message
+  window.sendMessage = () => {
+    const input = document.getElementById("message");
+    const message = input.value.trim();
+    if (!message) return;
+    socket.emit("send-message", { username, roomId, message });
+    input.value = "";
+  };
+});
 
 // 🔗 Convert URLs in messages into clickable links
 function linkify(text) {
