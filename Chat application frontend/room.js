@@ -1,34 +1,17 @@
 // 🌐 Declare socket as a global variable
 let socket;
-document.addEventListener("DOMContentLoaded", () => {
-  const userData = localStorage.getItem("user");
-  if (!userData) return alert("User not found");
 
-  const { username, roomId, isOwner } = JSON.parse(userData);
-
-  document.getElementById("username").textContent = username;
-  document.getElementById("room-id").textContent = roomId;
-  document.getElementById(
-    isOwner ? "delete-room-btn" : "leave-room-btn"
-  ).style.display = "inline-block";
-
-  // ✅ Connect to server
-  socket = io("https://chat-application-howg.onrender.com", {
-    transports: ["websocket"], // Enforce WebSocket only
-  });
-
-  // 🧠 Debug every incoming socket event
+// ✅ Setup all socket event listeners
+function setupSocketListeners(username, roomId) {
   socket.onAny((event, ...args) => {
     console.log("📡 SOCKET EVENT:", event, args);
   });
 
-  // ✅ After connection is established, join the room
   socket.on("connect", () => {
     console.log("🔗 Socket connected:", socket.id);
     socket.emit("join-room", roomId);
   });
 
-  // ✅ Message history loaded from backend
   socket.on("load-messages", (messages) => {
     console.log("📦 Message history loaded:", messages);
     const chat = document.getElementById("chat");
@@ -38,7 +21,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ✅ Real-time messages
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
   });
@@ -55,6 +37,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) messageCard.remove();
   });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const userData = localStorage.getItem("user");
+  if (!userData) return alert("User not found");
+
+  const { username, roomId, isOwner } = JSON.parse(userData);
+
+  document.getElementById("username").textContent = username;
+  document.getElementById("room-id").textContent = roomId;
+  document.getElementById(
+    isOwner ? "delete-room-btn" : "leave-room-btn"
+  ).style.display = "inline-block";
+
+  // ✅ Initialize socket
+  socket = io("https://chat-application-howg.onrender.com", {
+    transports: ["websocket"], // enforce WebSocket transport
+  });
+
+  // ✅ Setup all socket event handlers
+  setupSocketListeners(username, roomId);
 
   // 📨 Send message
   window.sendMessage = () => {
@@ -99,7 +102,6 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   ts.className = "timestamp";
   ts.textContent = time;
 
-  // ⚙️ Message action buttons (edit, delete, pin)
   const actionBtns = document.createElement("div");
   actionBtns.className = "action-buttons";
 
@@ -118,10 +120,10 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   content.appendChild(actionBtns);
   messageEl.append(content, ts);
   chat.appendChild(messageEl);
-  messageEl.scrollIntoView({ behavior: "smooth" }); // Auto-scroll
+  messageEl.scrollIntoView({ behavior: "smooth" });
 }
 
-// ✏️ Enable inline message editing
+// ✏️ Edit message
 window.editMessage = function (btn) {
   const messageCard = btn.closest(".message");
   const messageId = messageCard.dataset.id;
@@ -130,7 +132,6 @@ window.editMessage = function (btn) {
   const span = messageCard.querySelector(".message-content span");
   const oldText = span.textContent.trim();
 
-  // Prevent multiple edit inputs
   if (messageCard.querySelector("input.edit-input")) return;
 
   const input = document.createElement("input");
@@ -150,7 +151,6 @@ window.editMessage = function (btn) {
       return;
     }
 
-    // ✏️ Emit message edit to server
     socket.emit("edit-message", { id: messageId, newText, roomId });
 
     const updatedSpan = document.createElement("span");
@@ -183,7 +183,7 @@ window.deleteMessage = function (btn) {
   socket.emit("delete-message", { id: messageId, roomId });
 };
 
-// 🗑️ Delete entire room (creator only)
+// 🗑️ Delete room
 window.deleteRoom = function () {
   if (!confirm("Are you sure you want to delete the room?")) return;
   const user = JSON.parse(localStorage.getItem("user"));
@@ -198,7 +198,7 @@ window.deleteRoom = function () {
     .then((data) => {
       if (data.message === "Room deleted.") {
         localStorage.removeItem("user");
-        window.location.href = "mainPage.html"; // Redirect
+        window.location.href = "mainPage.html";
       } else {
         console.error("Error deleting room:", data.message);
       }
@@ -214,14 +214,14 @@ window.leaveRoom = function () {
   }
 };
 
-// 📌 Pin/Unpin message locally
+// 📌 Toggle pin
 window.togglePin = function (btn) {
   const messageCard = btn.closest(".message");
   const isPinned = messageCard.classList.toggle("pinned");
   btn.textContent = isPinned ? "Unpin" : "Pin";
 };
 
-// ❎ Auto-remove floating popups if clicked outside
+// ❎ Remove popups on outside click
 document.addEventListener("click", (e) => {
   const isInsidePopup = e.target.closest(".message-popup");
   const isInsideMessage = e.target.closest(".message");
