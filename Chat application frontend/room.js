@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Message handlers
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
-    if (displayedMessages.has(_id)) return; // Prevent duplicate render
+    if (displayedMessages.has(_id)) return;
     pendingMessages.delete(_id);
     displayMessage(username, message, timestamp, _id);
   });
