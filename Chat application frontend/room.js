@@ -1,52 +1,44 @@
 // 🌐 Declare socket as a global variable
 let socket;
-
 document.addEventListener("DOMContentLoaded", () => {
   const userData = localStorage.getItem("user");
   if (!userData) return alert("User not found");
 
-  const { username, roomId, isOwner } = JSON.parse(userData);
+  const user = JSON.parse(userData);
+  const { username, roomId, isOwner } = user;
 
-  document.getElementById("username").textContent = username;
-  document.getElementById("room-id").textContent = roomId;
   document.getElementById(
     isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
 
-  // ✅ Connect to server
-  socket = io("https://chat-application-howg.onrender.com", {
-    transports: ["websocket"], // Enforce WebSocket only
-  });
+  document.getElementById("room-id").textContent = roomId;
+  document.getElementById("username").textContent = username;
 
-  // 🧠 Debug every incoming socket event
-  socket.onAny((event, ...args) => {
-    console.log("📡 SOCKET EVENT:", event, args);
-  });
+  // ✅ Connect to socket
+  socket = io("https://chat-application-howg.onrender.com");
 
-  // ✅ After connection is established, join the room
+  // ✅ Wait until socket is fully connected
   socket.on("connect", () => {
-    console.log("🔗 Socket connected:", socket.id);
-    socket.emit("join-room", roomId, (response) => {
-      if (response.success) {
-        console.log("✅ Successfully joined room", roomId);
-        // Now you can safely enable message sending
+    console.log("🔌 Connected to socket, now joining room:", roomId);
+
+    // ✅ Acknowledge room join
+    socket.emit("join-room", roomId, (ack) => {
+      if (ack?.success) {
+        console.log("✅ Joined room successfully, now ready for messages");
       } else {
-        alert("❌ Failed to join room.");
+        console.error("❌ Failed to join room");
       }
     });
   });
 
-  // ✅ Message history loaded from backend
+  // ✅ Receive old messages
   socket.on("load-messages", (messages) => {
-    console.log("📦 Message history loaded:", messages);
-    const chat = document.getElementById("chat");
-    chat.innerHTML = "";
     messages.forEach(({ sender, content, timestamp, _id }) => {
       displayMessage(sender, content, timestamp, _id);
     });
   });
 
-  // ✅ Real-time messages
+  // ✅ Real-time message receive
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
   });
@@ -69,13 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById("message");
     const message = input.value.trim();
     if (!message) return;
-
-    socket.emit("send-message", {
-      roomId: document.getElementById("room-id").textContent,
-      username: document.getElementById("username").textContent,
-      message,
-    });
-
+    socket.emit("send-message", { username, roomId, message });
     input.value = "";
   };
 });

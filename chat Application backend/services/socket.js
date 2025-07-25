@@ -14,19 +14,17 @@ export const setupSocket = (server) => {
     console.log("User connected", socket.id);
 
     // Join a room and load previous messages
-    socket.on("join-room", async (roomId) => {
+    socket.on("join-room", async (roomId, callback) => {
       try {
         socket.join(roomId);
-
-        // Acknowledge join before sending messages
-        socket.emit("joined-room");
-
         const messages = await Message.find({ roomId }).sort({ timestamp: 1 });
-
-        // Now send messages
         socket.emit("load-messages", messages);
-      } catch (error) {
-        console.error("Error loading messages:", error);
+
+        // ✅ Acknowledge room join
+        if (callback) callback({ success: true });
+      } catch (err) {
+        console.error("Error in join-room:", err);
+        if (callback) callback({ success: false });
       }
     });
 

@@ -1,4 +1,5 @@
 // 🚪 Function to create a new room
+// 🚪 Function to create a new room
 async function createRoom() {
   try {
     const createRes = await fetch(
@@ -28,12 +29,22 @@ async function createRoom() {
       JSON.stringify({ username, roomId, isOwner: true })
     );
 
+    // ✅ Connect socket and wait for successful room join
     const socket = io("https://chat-application-howg.onrender.com");
 
     socket.on("connect", () => {
       console.log("🔌 Connected after room creation");
-      socket.emit("join-room", roomId); // no callback
-      window.location.href = `room.html?room=${roomId}`;
+
+      // ✅ Acknowledge join-room before redirecting
+      socket.emit("join-room", roomId, (res) => {
+        if (res?.success) {
+          console.log("✅ Room joined immediately after creation");
+          // 👉 Now redirect after confirmation
+          window.location.href = `room.html?room=${roomId}`;
+        } else {
+          alert("❌ Failed to join room after creation.");
+        }
+      });
     });
   } catch (error) {
     console.error("❌ Create Room Error:", error);
