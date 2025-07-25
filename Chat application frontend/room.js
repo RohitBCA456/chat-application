@@ -53,9 +53,19 @@ function setupSocketConnection() {
   socket.on("connect", () => {
     console.log("✅ Connected to server");
     socket.emit("join-room", currentRoomId, currentUser.username, (res) => {
+      console.log(
+        `✅ ${username} joined room ${roomId} (socket: ${socket.id})`
+      );
+
+      const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+      console.log(
+        `Users in room ${roomId}: ${socketsInRoom ? socketsInRoom.size : 0}`
+      );
+
       if (res.status === "success") {
         isSocketReady = true;
         console.log("✅ Joined room successfully");
+        document.getElementById("message").disabled = false;
       } else {
         alert("Failed to join room: " + res.message);
       }
