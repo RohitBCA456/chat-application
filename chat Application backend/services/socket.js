@@ -13,18 +13,19 @@ export const setupSocket = (server) => {
     console.log("✅ User connected:", socket.id);
 
     // 🔹 JOIN ROOM
-    socket.on("join-room", async (roomId) => {
+    socket.on("join-room", async (roomId, callback) => {
       try {
-        socket.join(roomId); // ✅ Join the socket.io room
-        socket.emit("joined-room"); // (Optional) Acknowledge join if needed on client
+        socket.join(roomId);
+        console.log(`✅ Socket ${socket.id} joined room ${roomId}`);
 
-        // 🔄 Fetch previous messages for this room
+        // Acknowledge join success back to client
+        if (callback) callback({ success: true });
+
         const messages = await Message.find({ roomId }).sort({ timestamp: 1 });
-
-        // 💬 Send chat history ONLY to the user who just joined
         socket.emit("load-messages", messages);
-      } catch (error) {
-        console.error("❌ Error loading messages:", error);
+      } catch (err) {
+        console.error("Join room error:", err);
+        if (callback) callback({ success: false });
       }
     });
 
@@ -47,7 +48,7 @@ export const setupSocket = (server) => {
         };
 
         // ✅ Broadcast to everyone including creator
-        io.to(roomId).emit("receive-message", payload);
+        io.to(roomId).emit("receive-message", messagePayload);
       } catch (err) {
         console.error("Send message error:", err);
       }
@@ -84,6 +85,11 @@ export const setupSocket = (server) => {
         console.error("❌ Error deleting message:", error);
       }
     });
+
+    setInterval(() => {
+      const roomIds = Array.from(io.sockets.adapter.rooms.keys());
+      console.log("📂 Active rooms:", roomIds);
+    }, 10000);
 
     // 🔌 Handle user disconnect
     socket.on("disconnect", () => {

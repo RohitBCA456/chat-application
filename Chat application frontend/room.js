@@ -9,7 +9,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("username").textContent = username;
   document.getElementById("room-id").textContent = roomId;
-  document.getElementById(isOwner ? "delete-room-btn" : "leave-room-btn").style.display = "inline-block";
+  document.getElementById(
+    isOwner ? "delete-room-btn" : "leave-room-btn"
+  ).style.display = "inline-block";
 
   // ✅ Connect to server
   socket = io("https://chat-application-howg.onrender.com", {
@@ -24,7 +26,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // ✅ After connection is established, join the room
   socket.on("connect", () => {
     console.log("🔗 Socket connected:", socket.id);
-    socket.emit("join-room", roomId);
+    socket.emit("join-room", roomId, (response) => {
+      if (response.success) {
+        console.log("✅ Successfully joined room", roomId);
+        // Now you can safely enable message sending
+      } else {
+        alert("❌ Failed to join room.");
+      }
+    });
   });
 
   // ✅ Message history loaded from backend
@@ -55,16 +64,29 @@ document.addEventListener("DOMContentLoaded", () => {
     if (messageCard) messageCard.remove();
   });
 
+  socket.on("connect_error", (err) => {
+    console.error("❌ Connection error:", err);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.warn("⚠️ Disconnected:", reason);
+  });
+
   // 📨 Send message
   window.sendMessage = () => {
     const input = document.getElementById("message");
     const message = input.value.trim();
     if (!message) return;
-    socket.emit("send-message", { username, roomId, message });
+
+    socket.emit("send-message", {
+      roomId: document.getElementById("room-id").textContent,
+      username: document.getElementById("username").textContent,
+      message,
+    });
+
     input.value = "";
   };
 });
-
 
 // 🔗 Convert URLs in messages into clickable links
 function linkify(text) {
