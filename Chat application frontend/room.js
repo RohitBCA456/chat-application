@@ -23,7 +23,7 @@ function initializeChat() {
   // Update UI
   document.getElementById("room-id").textContent = currentUser.roomId;
   document.getElementById("username").textContent = currentUser.username;
-  
+
   // Show appropriate button
   document.getElementById(
     currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
@@ -64,7 +64,7 @@ function setupSocketConnection() {
 
   socket.on("load-messages", (messages) => {
     const chat = document.getElementById("chat");
-    
+
     // Only clear chat if it's the initial load
     if (!hasLoadedInitialMessages) {
       chat.innerHTML = "";
@@ -72,8 +72,8 @@ function setupSocketConnection() {
     }
 
     // Filter out messages we've already displayed
-    const newMessages = messages.filter(msg => 
-      !document.querySelector(`[data-id="${msg._id}"]`)
+    const newMessages = messages.filter(
+      (msg) => !document.querySelector(`[data-id="${msg._id}"]`)
     );
 
     newMessages.forEach((message) => {
@@ -114,7 +114,7 @@ function displayMessage(sender, content, timestamp, messageId) {
   }
 
   const chat = document.getElementById("chat");
-  
+
   const messageEl = document.createElement("div");
   messageEl.className = `message ${
     sender === currentUser.username ? "mine" : "other"
@@ -172,14 +172,27 @@ function sendMessage() {
         const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
         if (tempMsg) tempMsg.remove();
         alert("Failed to send: " + response.message);
+      } else {
+        // Replace the temporary message with the actual message from the server
+        const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+        if (tempMsg) {
+          tempMsg.dataset.id = response.message._id;
+          tempMsg.querySelector(".timestamp").textContent = new Date(
+            response.message.createdAt
+          ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
       }
     }
   );
 }
 
 // Delete room function
-window.deleteRoom = function() {
-  if (!confirm("Are you sure you want to delete this room? All messages will be lost.")) {
+window.deleteRoom = function () {
+  if (
+    !confirm(
+      "Are you sure you want to delete this room? All messages will be lost."
+    )
+  ) {
     return;
   }
 
@@ -194,7 +207,7 @@ window.deleteRoom = function() {
 };
 
 // Leave room function
-window.leaveRoom = function() {
+window.leaveRoom = function () {
   if (confirm("Are you sure you want to leave the room?")) {
     socket.emit("leave-room", currentRoomId, () => {
       localStorage.removeItem("user");
