@@ -1,6 +1,7 @@
 // declaring socket as global variable
 let socket;
 let isSocketReady = false;
+const messageCache = new Set(); // Track displayed messages to prevent duplicates
 
 document.addEventListener("DOMContentLoaded", () => {
   const userData = localStorage.getItem("user");
@@ -15,22 +16,24 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
-  // Initialize socket
-  // In your DOMContentLoaded handler
+  // Initialize socket with proper authentication
   socket = io("https://chat-application-howg.onrender.com", {
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     autoConnect: true,
     auth: {
-      username: username, // Send username during connection
+      username: username,
+      roomId: roomId,
     },
+    transports: ["websocket", "polling"], // Specify transports explicitly
   });
 
   // Socket event handlers
   socket.on("connect", () => {
     console.log("✅ Connected to server");
     isSocketReady = true;
-    socket.emit("join-room", roomId);
+    // Include username when joining room
+    socket.emit("join-room", { roomId, username });
   });
 
   socket.on("disconnect", () => {
@@ -40,13 +43,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   socket.on("connect_error", (err) => {
     console.error("Connection error:", err);
-    // Fallback to polling if websocket fails
-    socket.io.opts.transports = ["polling", "websocket"];
   });
 
-  // Message handlers
+  // Message handlers with duplicate prevention
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
-    displayMessage(username, message, timestamp, _id);
+    if (!messageCache.has(_id)) {
+      messageCache.add(_id);
+      displayMessage(username, message, timestamp, _id);
+    }
   });
 
   socket.on("load-messages", (messages) => {
@@ -54,7 +58,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Clear only if empty to prevent duplicates
     if (chat.children.length === 0) {
       messages.forEach(({ sender, content, timestamp, _id }) => {
-        displayMessage(sender, content, timestamp, _id);
+        if (!messageCache.has(_id)) {
+          messageCache.add(_id);
+          displayMessage(sender, content, timestamp, _id);
+        }
       });
     }
   });
@@ -69,7 +76,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   socket.on("message-deleted", ({ id }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
-    if (messageCard) messageCard.remove();
+    if (messageCard) {
+      messageCard.remove();
+      messageCache.delete(id); // Remove from cache
+    }
   });
 
   socket.on("error", (errorMsg) => {
@@ -90,11 +100,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// ... (keep all your existing code above) ...
-
-// ✅ Send message function
+// ✅ Send message function (updated with message queue and retry logic)
+const messageQueue = [];
 window.sendMessage = function () {
-  // Get user data
   const userData = localStorage.getItem("user");
   if (!userData) {
     alert("Session expired. Please rejoin the room.");
@@ -102,76 +110,81 @@ window.sendMessage = function () {
     return;
   }
 
-  const user = JSON.parse(userData);
-  const { username, roomId } = user;
+  const { username, roomId } = JSON.parse(userData);
   const input = document.getElementById("message");
   const message = input.value.trim();
 
-  // Validate input
   if (!message) return;
-  if (!socket || !socket.connected) {
-    alert("Connection lost. Trying to reconnect...");
-    socket.connect();
-    return;
-  }
 
-  // Optimistic UI update (temporary display)
-  const tempId = "temp-" + Date.now();
-  displayMessage(username, message, new Date(), tempId);
+  const messageData = {
+    roomId,
+    username,
+    message,
+    tempId: "temp-" + Date.now(),
+  };
+
+  // Optimistic UI update
+  displayMessage(username, message, new Date(), messageData.tempId);
   input.value = "";
   input.focus();
 
-  // Send via socket
-  socket.emit(
-    "send-message",
-    {
-      roomId,
-      username,
-      message,
-    },
-    (ack) => {
-      // Handle acknowledgment from server
-      if (ack && ack.error) {
-        console.error("Send failed:", ack.error);
-        // Remove the optimistic message if failed
-        const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
-        if (tempMsg) tempMsg.remove();
-        alert("Failed to send: " + ack.error);
-      }
-      // If success, the server will send the real message which will replace our temp one
-    }
-  );
-
-  // Fallback to HTTP after 2 seconds if no response
-  const fallbackTimer = setTimeout(async () => {
-    try {
-      const res = await fetch(
-        `https://chat-application-howg.onrender.com/message/send`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ roomId, username, message }),
-        }
-      );
-
-      if (!res.ok) throw new Error("HTTP send failed");
-      console.log("Message sent via HTTP fallback");
-    } catch (error) {
-      console.error("Fallback failed:", error);
-      const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
-      if (tempMsg) tempMsg.remove();
-      alert("Message failed to send. Please try again.");
-    }
-  }, 2000);
-
-  // Cancel fallback if socket responds
-  socket.once("receive-message", () => clearTimeout(fallbackTimer));
+  if (isSocketReady) {
+    sendMessageNow(messageData);
+  } else {
+    messageQueue.push(messageData);
+    alert(
+      "Connection unstable. Message will be sent when connection is restored"
+    );
+  }
 };
 
-// ... (rest of your existing code below) ...
+function sendMessageNow({ roomId, username, message, tempId }) {
+  socket.emit("send-message", { roomId, username, message }, (ack) => {
+    const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+    if (ack?.error) {
+      if (tempMsg) tempMsg.remove();
+      alert("Failed to send: " + ack.error);
+    }
+  });
+}
 
-// ... rest of your room.js code remains the same ...
+// Process queued messages when connection is restored
+socket.on("connect", () => {
+  while (messageQueue.length > 0) {
+    const msg = messageQueue.shift();
+    sendMessageNow(msg);
+  }
+});
+
+// ✅ Delete message (updated with proper error handling)
+window.deleteMessage = function (btn) {
+  const messageCard = btn.closest(".message");
+  const messageId = messageCard.dataset.id;
+  const roomId = document.getElementById("room-id").textContent;
+  const username = document.getElementById("username").textContent;
+
+  if (!messageId) return console.error("Message ID not found");
+
+  if (!confirm("Are you sure you want to delete this message?")) return;
+
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+
+  socket.emit(
+    "delete-message",
+    { id: messageId, roomId, username },
+    (response) => {
+      btn.disabled = false;
+      btn.textContent = "Delete";
+      if (response?.error) {
+        alert(response.error);
+      }
+    }
+  );
+};
+
+// ... (rest of your existing helper functions remain the same) ...
+
 // ✅ Make URLs clickable in messages
 function linkify(text) {
   return text.replace(
@@ -192,16 +205,26 @@ async function fetchMessageHistoryAndRender(roomId) {
     const chat = document.getElementById("chat");
     chat.innerHTML = "";
     data.messages.forEach(({ sender, content, timestamp, _id }) => {
-      displayMessage(sender, content, timestamp, _id);
+      if (!messageCache.has(_id)) {
+        messageCache.add(_id);
+        displayMessage(sender, content, timestamp, _id);
+      }
     });
   } catch (err) {
     console.error("Error fetching messages:", err);
   }
 }
 
-// ✅ Display message bubble
+// ✅ Display message bubble (updated to handle temporary messages)
 function displayMessage(user, text, timestamp = null, messageId = null) {
   const chat = document.getElementById("chat");
+
+  // Remove any existing temporary message from this user
+  if (messageId && messageId.startsWith("temp-")) {
+    const existingTemp = document.querySelector(`[data-id="${messageId}"]`);
+    if (existingTemp) existingTemp.remove();
+  }
+
   const messageEl = document.createElement("div");
   messageEl.className = `message ${
     user === document.getElementById("username").textContent ? "mine" : "other"
@@ -226,7 +249,10 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   const actionBtns = document.createElement("div");
   actionBtns.className = "action-buttons";
 
-  if (user === document.getElementById("username").textContent) {
+  if (
+    user === document.getElementById("username").textContent &&
+    !messageId.startsWith("temp-")
+  ) {
     actionBtns.innerHTML += `
       <button onclick="editMessage(this)" class="pop-up-btn edit-btn">Edit</button>
       <button onclick="deleteMessage(this)" class="pop-up-btn delete-btn">Delete</button>
