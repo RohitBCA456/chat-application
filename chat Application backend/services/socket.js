@@ -80,7 +80,7 @@ export const setupSocket = (server) => {
         await Message.deleteMany({ roomId });
         
         // Delete the room itself
-        await Room.deleteOne({ _id: roomId });
+        await Room.deleteOne({ roomId: roomId });
         
         // Notify all clients in the room
         io.to(roomId).emit("room-deleted");
