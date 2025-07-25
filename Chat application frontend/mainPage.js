@@ -1,4 +1,4 @@
-// 🚪 Function to create a new room
+// function to create room
 async function createRoom() {
   try {
     const createRes = await fetch(
@@ -10,45 +10,35 @@ async function createRoom() {
       }
     );
 
-    console.log("🟡 createRes:", createRes);
+    const createData = await createRes.json();
+    if (!createRes.ok) return alert(createData.message);
 
-    const createData = await createRes.json().catch((err) => {
-      console.error("❌ Failed to parse JSON from createRes", err);
-      throw new Error("Invalid JSON from server");
-    });
-
-    console.log("🟢 createData:", createData);
-
-    if (!createRes.ok) return alert(createData.message || "Server error");
-
-    const { user: username, roomId } = createData;
-
+    // ✅ Save user info to localStorage
     localStorage.setItem(
       "user",
-      JSON.stringify({ username, roomId, isOwner: true })
+      JSON.stringify({
+        username: createData.user,
+        roomId: createData.roomId,
+        isOwner: true,
+      })
     );
 
-    const socket = io("https://chat-application-howg.onrender.com");
-
-    socket.on("connect", () => {
-      console.log("🔌 Connected after room creation");
-      socket.emit("join-room", roomId); // no callback
-      window.location.href = `room.html?room=${roomId}`;
-    });
-    
+    // ✅ Redirect immediately — no delay needed
+    window.location.href = `room.html?room=${createData.roomId}`;
   } catch (error) {
-    console.error("❌ Create Room Error:", error);
+    console.error("Create Room Error:", error);
     alert("Something went wrong while creating room.");
   }
 }
 
-// 🔑 Function to join an existing room by Room ID
+// function to join room using the roomId
 async function joinRoom() {
+  // getting roomId as input
   const roomId = document.getElementById("roomId").value.trim();
   if (!roomId) return alert("Enter the Room ID");
 
   try {
-    // 🔗 Request backend to join an existing room
+    // sending the roomId to join the room using the backend route
     const joinRes = await fetch(
       "https://chat-application-howg.onrender.com/user/joinroom",
       {
@@ -59,26 +49,30 @@ async function joinRoom() {
       }
     );
 
-    // 🔄 Parse response JSON
+    // storing the response in the joinData variable
     const joinData = await joinRes.json();
-    if (!joinRes.ok) return alert(joinData.message); // ⚠️ Show error if join failed
-
+    console.log(joinData);
+    // extracting the username and isOwner data from the response
     const { user: username, isOwner } = joinData;
+    // if no response or valid data is provided return alert message of the issue that occured
+    if (!joinRes.ok) return alert(joinData.message);
 
-    // 💾 Save joined user info to localStorage
+    // storing the response in the localStorage of the browser
     localStorage.setItem("user", JSON.stringify({ username, roomId, isOwner }));
 
-    // 👉 Redirect to the chat room
+    // redirecting the user to room.html page on successful joinRoom
     window.location.href = `room.html?room=${roomId}`;
   } catch (error) {
-    console.error("❌ Join Room Error:", error);
+    // consoling and sending alert message if any error occurred
+    console.error("Join Room Error:", error);
     alert("Something went wrong while joining the room.");
   }
 }
 
-// 📋 Function to fetch and display all available rooms
+// function to fetchRooms that exist
 async function fetchRooms() {
   try {
+    //get all the rooms that are currently available
     const res = await fetch(
       "https://chat-application-howg.onrender.com/room/getallroom"
     );
@@ -87,24 +81,25 @@ async function fetchRooms() {
     const roomContainer = document.getElementById("roomContainer");
     roomContainer.innerHTML = "";
 
-    // 🚫 No rooms found
+    // if no room found
     if (rooms.length === 0) {
       roomContainer.innerHTML = "<li>No rooms available</li>";
       return;
     }
 
-    // ✅ Render available rooms
+    // displaying the rooms in the ui
     rooms.forEach((room) => {
       const li = document.createElement("li");
       li.textContent = `👤 ${room.username} — 🆔 ${room.roomId}`;
       roomContainer.appendChild(li);
     });
   } catch (error) {
-    console.error("❌ Error fetching rooms:", error);
+    //consoling and sending error message if any occured
+    console.error("Error fetching rooms:", error);
     document.getElementById("roomContainer").innerHTML =
       "<li>Failed to load rooms</li>";
   }
 }
 
-// 📦 Load all rooms when the page is ready
+// EventListener to listen on DomContentLoad
 window.addEventListener("DOMContentLoaded", fetchRooms);
