@@ -197,11 +197,7 @@ function createMessageElement(user, text, timestamp, messageId) {
 
 // Message operations
 window.sendMessage = function () {
-  if (!roomJoined) {
-    alert("Please wait until you've fully joined the room");
-    return;
-  }
-
+  
   const user = JSON.parse(localStorage.getItem("user"));
   const input = document.getElementById("message");
   const message = input.value.trim();
