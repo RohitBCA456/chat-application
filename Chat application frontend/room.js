@@ -1,7 +1,8 @@
 // declaring socket as global variable
 let socket;
 let isSocketReady = false;
-const pendingMessages = new Set();
+const pendingMessages = new Set(); // For tracking optimistic messages
+const displayedMessages = new Set(); // For tracking all displayed messages
 
 document.addEventListener("DOMContentLoaded", () => {
   const userData = localStorage.getItem("user");
