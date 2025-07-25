@@ -1,52 +1,47 @@
-// declaring socket as global variable
+// 🌐 Declare socket as a global variable
 let socket;
 
 document.addEventListener("DOMContentLoaded", () => {
+  // 📦 Get user data from localStorage
   const userData = localStorage.getItem("user");
   if (!userData) return alert("User not found");
 
   const user = JSON.parse(userData);
   const { username, roomId, isOwner } = user;
 
+  // 🔘 Show the correct button based on user role
   document.getElementById(
     isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
+
+  // 🆔 Show room ID and username
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
-
-  // ✅ Join the room and fetch messages after connection established
-  // Ensure socket is connected before emitting
-  function waitForSocketConnection(callback) {
-    if (socket && socket.connected) {
-      callback();
-    } else {
-      setTimeout(() => waitForSocketConnection(callback), 100);
-    }
-  }
-
-  // ✅ Initialize socket only once
+  // ⚡️ Initialize socket connection
   socket = io("https://chat-application-howg.onrender.com");
 
-  waitForSocketConnection(() => {
+  // 🔌 On successful connection, join the room
+  socket.on("connect", () => {
     console.log("✅ Connected to server");
-    socket.emit("join-room", roomId);
-    fetchMessageHistoryAndRender(roomId); // fallback fetch
+    socket.emit("join-room", roomId); // 👥 Join the specified chat room
   });
 
-  // ✅ Real-time receive message
+  // 📨 Load old messages when joining the room (handled by server)
+  socket.on("load-messages", (messages) => {
+    const chat = document.getElementById("chat");
+    chat.innerHTML = ""; // Clear existing chat
+    messages.forEach(({ sender, content, timestamp, _id }) => {
+      displayMessage(sender, content, timestamp, _id); // Show each old message
+    });
+  });
+
+  // 💬 Listen for new messages in real-time
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
   });
 
-  // ✅ Load old messages after join-room
-  socket.on("load-messages", (messages) => {
-    messages.forEach(({ sender, content, timestamp, _id }) => {
-      displayMessage(sender, content, timestamp, _id);
-    });
-  });
-
-  // ✅ Edit message in real-time
+  // ✏️ Real-time message editing
   socket.on("message-edited", ({ id, newText }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
@@ -55,27 +50,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ✅ Delete message in real-time
+  // ❌ Real-time message deletion
   socket.on("message-deleted", ({ id }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) messageCard.remove();
   });
 
-  // ✅ Send message function
+  // 🚀 Send a message
   window.sendMessage = function () {
     const input = document.getElementById("message");
     const message = input.value.trim();
     if (!message) return;
 
     socket.emit("send-message", { roomId, username, message });
-    input.value = "";
-
-    // Fallback to re-fetch in case delivery fails
-    setTimeout(() => fetchMessageHistoryAndRender(roomId), 500);
+    input.value = ""; // Clear input field
   };
 });
 
-// ✅ Make URLs clickable in messages
+// 🔗 Convert URLs in messages into clickable links
 function linkify(text) {
   return text.replace(
     /(https?:\/\/[^\s]+)/g,
@@ -83,28 +75,10 @@ function linkify(text) {
   );
 }
 
-// ✅ Fetch and render messages
-async function fetchMessageHistoryAndRender(roomId) {
-  try {
-    const res = await fetch(
-      `https://chat-application-howg.onrender.com/message/messages/${roomId}`
-    );
-    const data = await res.json();
-    if (!Array.isArray(data.messages)) return;
-
-    const chat = document.getElementById("chat");
-    chat.innerHTML = "";
-    data.messages.forEach(({ sender, content, timestamp, _id }) => {
-      displayMessage(sender, content, timestamp, _id);
-    });
-  } catch (err) {
-    console.error("Error fetching messages:", err);
-  }
-}
-
-// ✅ Display message bubble
+// 🧱 Render a single message
 function displayMessage(user, text, timestamp = null, messageId = null) {
   const chat = document.getElementById("chat");
+
   const messageEl = document.createElement("div");
   messageEl.className = `message ${
     user === document.getElementById("username").textContent ? "mine" : "other"
@@ -126,6 +100,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   ts.className = "timestamp";
   ts.textContent = time;
 
+  // ⚙️ Message action buttons (edit, delete, pin)
   const actionBtns = document.createElement("div");
   actionBtns.className = "action-buttons";
 
@@ -144,10 +119,10 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   content.appendChild(actionBtns);
   messageEl.append(content, ts);
   chat.appendChild(messageEl);
-  messageEl.scrollIntoView({ behavior: "smooth" });
+  messageEl.scrollIntoView({ behavior: "smooth" }); // Auto-scroll
 }
 
-// ✅ Edit message functionality
+// ✏️ Enable inline message editing
 window.editMessage = function (btn) {
   const messageCard = btn.closest(".message");
   const messageId = messageCard.dataset.id;
@@ -156,6 +131,7 @@ window.editMessage = function (btn) {
   const span = messageCard.querySelector(".message-content span");
   const oldText = span.textContent.trim();
 
+  // Prevent multiple edit inputs
   if (messageCard.querySelector("input.edit-input")) return;
 
   const input = document.createElement("input");
@@ -175,6 +151,7 @@ window.editMessage = function (btn) {
       return;
     }
 
+    // ✏️ Emit message edit to server
     socket.emit("edit-message", { id: messageId, newText, roomId });
 
     const updatedSpan = document.createElement("span");
@@ -197,16 +174,17 @@ window.editMessage = function (btn) {
   }
 };
 
-// ✅ Delete message
+// ❌ Delete a message
 window.deleteMessage = function (btn) {
   const messageCard = btn.closest(".message");
   const messageId = messageCard.dataset.id;
   const roomId = document.getElementById("room-id").textContent;
+
   if (!messageId) return console.error("Message ID not found");
   socket.emit("delete-message", { id: messageId, roomId });
 };
 
-// ✅ Delete room
+// 🗑️ Delete entire room (creator only)
 window.deleteRoom = function () {
   if (!confirm("Are you sure you want to delete the room?")) return;
   const user = JSON.parse(localStorage.getItem("user"));
@@ -221,7 +199,7 @@ window.deleteRoom = function () {
     .then((data) => {
       if (data.message === "Room deleted.") {
         localStorage.removeItem("user");
-        window.location.href = "mainPage.html";
+        window.location.href = "mainPage.html"; // Redirect
       } else {
         console.error("Error deleting room:", data.message);
       }
@@ -229,7 +207,7 @@ window.deleteRoom = function () {
     .catch(console.error);
 };
 
-// ✅ Leave room
+// 🚪 Leave room
 window.leaveRoom = function () {
   if (confirm("Are you sure you want to leave the room?")) {
     localStorage.removeItem("user");
@@ -237,14 +215,14 @@ window.leaveRoom = function () {
   }
 };
 
-// ✅ Pin message
+// 📌 Pin/Unpin message locally
 window.togglePin = function (btn) {
   const messageCard = btn.closest(".message");
   const isPinned = messageCard.classList.toggle("pinned");
   btn.textContent = isPinned ? "Unpin" : "Pin";
 };
 
-// ✅ Dismiss popup (safety)
+// ❎ Auto-remove floating popups if clicked outside
 document.addEventListener("click", (e) => {
   const isInsidePopup = e.target.closest(".message-popup");
   const isInsideMessage = e.target.closest(".message");
