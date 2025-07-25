@@ -76,7 +76,6 @@ function setupSocketConnection(user) {
     console.error("Connection error:", err);
   });
 
-  // Message handlers
   socket.on("load-messages", (messages) => {
     const chat = document.getElementById("chat");
     chat.innerHTML = "";
