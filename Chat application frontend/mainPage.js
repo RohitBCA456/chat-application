@@ -1,4 +1,3 @@
-// function to create room
 async function createRoom() {
   try {
     const createRes = await fetch(
@@ -13,7 +12,7 @@ async function createRoom() {
     const createData = await createRes.json();
     if (!createRes.ok) return alert(createData.message);
 
-    // ✅ Save user info to localStorage
+    // Save user info to localStorage
     localStorage.setItem(
       "user",
       JSON.stringify({
@@ -23,7 +22,10 @@ async function createRoom() {
       })
     );
 
-    // ✅ Redirect immediately — no delay needed
+    // Add a small delay to ensure room is properly created on server
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Redirect to room page
     window.location.href = `room.html?room=${createData.roomId}`;
   } catch (error) {
     console.error("Create Room Error:", error);

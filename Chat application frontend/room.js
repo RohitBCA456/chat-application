@@ -90,16 +90,18 @@ function handleConnect() {
   isSocketReady = true;
   reconnectAttempts = 0;
 
-  const tryJoinRoom = (attempt = 1) => {
-    if (!socket.connected || !currentRoomId || !currentUser?.username) {
-      if (attempt > 5) {
-        console.error("❌ Failed to join room after multiple attempts");
-        return;
-      }
-      console.warn(
-        "⚠️ Waiting for socket to become ready... Retrying join-room"
-      );
-      return setTimeout(() => tryJoinRoom(attempt + 1), 500);
+  // Ensure we have all required data before joining
+  if (!currentRoomId || !currentUser?.username) {
+    console.error("Missing room ID or username");
+    return;
+  }
+
+  // Immediate join attempt with retry logic
+  const joinRoomWithRetry = (attempt = 1) => {
+    if (attempt > 5) {
+      console.error("❌ Failed to join room after multiple attempts");
+      alert("Failed to join room. Please refresh the page.");
+      return;
     }
 
     socket.emit(
@@ -109,15 +111,20 @@ function handleConnect() {
       (response) => {
         if (response?.status === "success") {
           console.log("✅ Successfully joined room");
+          // Clear any pending messages
+          pendingMessages.clear();
         } else {
-          console.error("Join room failed:", response?.message);
-          handleConnectionFailure();
+          console.warn(
+            `⚠️ Join room failed (attempt ${attempt}):`,
+            response?.message
+          );
+          setTimeout(() => joinRoomWithRetry(attempt + 1), 500 * attempt);
         }
       }
     );
   };
 
-  tryJoinRoom();
+  joinRoomWithRetry();
 }
 
 function handleDisconnect(reason) {

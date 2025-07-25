@@ -12,9 +12,9 @@ export const setupSocket = (server) => {
       maxDisconnectionDuration: 2 * 60 * 1000,
       skipMiddlewares: true,
     },
-    pingTimeout: 30000,  // Increased from default 5000
+    pingTimeout: 30000, // Increased from default 5000
     pingInterval: 15000, // Increased from default 25000
-    transports: ['websocket', 'polling']
+    transports: ["websocket", "polling"],
   });
 
   // Track active connections
@@ -24,11 +24,11 @@ export const setupSocket = (server) => {
     console.log(`✅ New connection: ${socket.id}`);
     activeConnections.set(socket.id, {
       connectedAt: Date.now(),
-      lastActive: Date.now()
+      lastActive: Date.now(),
     });
 
     // Heartbeat mechanism
-    socket.on('heartbeat', () => {
+    socket.on("heartbeat", () => {
       const conn = activeConnections.get(socket.id);
       if (conn) {
         conn.lastActive = Date.now();
@@ -45,14 +45,17 @@ export const setupSocket = (server) => {
           throw new Error(`Room ${roomId} doesn't exist`);
         }
 
-        // Leave previous rooms
-        const previousRooms = Array.from(socket.rooms).filter(r => r !== socket.id);
-        previousRooms.forEach(room => {
-          socket.leave(room);
-          console.log(`Left room ${room}`);
+        // Leave previous rooms (including any default rooms)
+        const previousRooms = Array.from(socket.rooms);
+        previousRooms.forEach((room) => {
+          if (room !== socket.id) {
+            // Don't leave the socket's default room
+            socket.leave(room);
+            console.log(`Left room ${room}`);
+          }
         });
 
-        // Join new room
+        // Join new room with acknowledgment
         await socket.join(roomId);
         console.log(`👤 ${username} joined ${roomId}`);
 
@@ -60,22 +63,27 @@ export const setupSocket = (server) => {
         const messages = await Message.find({ roomId })
           .sort({ createdAt: 1 })
           .limit(100);
-        
-        callback({ 
+
+        // Confirm room join success
+        callback({
           status: "success",
-          messageCount: messages.length 
+          messageCount: messages.length,
         });
-        
+
+        // Send messages to only this client
         socket.emit("load-messages", messages);
+
+        // Notify others in the room about new user (optional)
+        socket.to(roomId).emit("user-joined", username);
       } catch (error) {
         console.error(`Join error for ${socket.id}:`, error.message);
-        callback({ 
-          status: "error", 
+        callback({
+          status: "error",
           message: error.message,
-          retry: true
+          retry: true,
         });
-        
-        // Auto-retry after 2 seconds
+
+        // Auto-retry after delay
         setTimeout(() => {
           if (socket.connected) {
             joinRoomHandler(roomId, username, callback);
@@ -83,49 +91,52 @@ export const setupSocket = (server) => {
         }, 2000);
       }
     };
-
     socket.on("join-room", joinRoomHandler);
 
     // Message handling with delivery tracking
-    socket.on("send-message", async ({ content, roomId, username, tempId }, callback = () => {}) => {
-      try {
-        if (!content?.trim() || !roomId || !username) {
-          throw new Error("Invalid message data");
+    socket.on(
+      "send-message",
+      async ({ content, roomId, username, tempId }, callback = () => {}) => {
+        try {
+          if (!content?.trim() || !roomId || !username) {
+            throw new Error("Invalid message data");
+          }
+
+          // Create and save message
+          const newMessage = new Message({
+            content: content.trim(),
+            roomId,
+            sender: username,
+          });
+          await newMessage.save();
+
+          // Broadcast to room including sender
+          io.to(roomId).emit("new-message", {
+            ...newMessage.toObject(),
+            tempId, // For client-side reconciliation
+          });
+
+          callback({
+            status: "delivered",
+            messageId: newMessage._id,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          console.error(`Send error for ${socket.id}:`, error.message);
+          callback({
+            status: "failed",
+            message: error.message,
+            tempId, // Return tempId for client to handle failed messages
+          });
         }
-
-        // Create and save message
-        const newMessage = new Message({ 
-          content: content.trim(), 
-          roomId, 
-          sender: username 
-        });
-        await newMessage.save();
-
-        // Broadcast to room including sender
-        io.to(roomId).emit("new-message", {
-          ...newMessage.toObject(),
-          tempId // For client-side reconciliation
-        });
-
-        callback({ 
-          status: "delivered",
-          messageId: newMessage._id,
-          timestamp: new Date()
-        });
-      } catch (error) {
-        console.error(`Send error for ${socket.id}:`, error.message);
-        callback({ 
-          status: "failed", 
-          message: error.message,
-          tempId // Return tempId for client to handle failed messages
-        });
       }
-    });
+    );
 
     // Connection health monitoring
     const connectionCheck = setInterval(() => {
       const conn = activeConnections.get(socket.id);
-      if (conn && Date.now() - conn.lastActive > 45000) { // 45s inactivity
+      if (conn && Date.now() - conn.lastActive > 45000) {
+        // 45s inactivity
         console.log(`🚨 Inactive connection ${socket.id}, disconnecting`);
         socket.disconnect();
       }
@@ -136,7 +147,7 @@ export const setupSocket = (server) => {
       clearInterval(connectionCheck);
       activeConnections.delete(socket.id);
       console.log(`❌ Disconnected: ${socket.id} (Reason: ${reason})`);
-      
+
       // Log connection duration
       const conn = activeConnections.get(socket.id);
       if (conn) {
