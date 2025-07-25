@@ -3,6 +3,7 @@ let socket;
 let currentRoomId = null;
 let currentUser = null;
 let hasLoadedInitialMessages = false;
+let isSocketReady = false;
 
 // Initialize the application
 document.addEventListener("DOMContentLoaded", () => {
@@ -51,7 +52,14 @@ function setupSocketConnection() {
 
   socket.on("connect", () => {
     console.log("✅ Connected to server");
-    socket.emit("join-room", currentRoomId, currentUser.username);
+    socket.emit("join-room", currentRoomId, currentUser.username, (res) => {
+      if (res.status === "success") {
+        isSocketReady = true;
+        console.log("✅ Joined room successfully");
+      } else {
+        alert("Failed to join room: " + res.message);
+      }
+    });
   });
 
   socket.on("disconnect", () => {
@@ -87,6 +95,7 @@ function setupSocketConnection() {
   });
 
   socket.on("new-message", (message) => {
+    console.log("✅ New message received from server:", message);
     // Check if a temp message for this user and content already exists
     const tempMsg = Array.from(document.querySelectorAll(".message.mine")).find(
       (el) =>
@@ -167,12 +176,15 @@ function linkify(text) {
 }
 
 function sendMessage() {
+  if (!isSocketReady) {
+    return alert("Please wait... Connecting to room.");
+  }
+
   const input = document.getElementById("message");
   const content = input.value.trim();
 
   if (!content || !socket || !socket.connected) return;
 
-  // Optimistic UI update
   const tempId = "temp-" + Date.now();
   displayMessage(currentUser.username, content, new Date(), tempId);
   input.value = "";
@@ -191,7 +203,6 @@ function sendMessage() {
         if (tempMsg) tempMsg.remove();
         alert("Failed to send: " + response.message);
       } else {
-        // Replace the temporary message with the actual message from the server
         const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
         if (tempMsg) {
           tempMsg.dataset.id = response.message._id;
