@@ -2,49 +2,38 @@
 let socket;
 
 document.addEventListener("DOMContentLoaded", () => {
-  // 📦 Get user data from localStorage
   const userData = localStorage.getItem("user");
   if (!userData) return alert("User not found");
 
-  const user = JSON.parse(userData);
-  const { username, roomId, isOwner } = user;
+  const { username, roomId, isOwner } = JSON.parse(userData);
 
-  // 🔘 Show the correct button based on user role
+  // Display room and user info
+  document.getElementById("room-id").textContent = roomId;
+  document.getElementById("username").textContent = username;
   document.getElementById(
     isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
 
-  // 🆔 Show room ID and username
-  document.getElementById("room-id").textContent = roomId;
-  document.getElementById("username").textContent = username;
-
-  // ⚡️ Initialize socket connection
+  // ✅ Connect to Socket.IO
   socket = io("https://chat-application-howg.onrender.com");
 
-  // ✅ Wait for connection before emitting join-room
-  function waitForSocketConnection(callback) {
-    if (socket && socket.connected) {
-      callback();
-    } else {
-      setTimeout(() => waitForSocketConnection(callback), 100); // retry every 100ms
-    }
-  }
-
-  waitForSocketConnection(() => {
-    console.log("✅ Connected to server (waited)");
+  // ✅ Wait for socket to connect before emitting join-room
+  socket.on("connect", () => {
+    console.log("✅ Socket connected. Emitting join-room");
     socket.emit("join-room", roomId);
   });
 
-  // 📨 Load old messages when joining the room (handled by server)
+  // ✅ Receive load-messages
   socket.on("load-messages", (messages) => {
+    console.log("📦 Received messages:", messages);
     const chat = document.getElementById("chat");
-    chat.innerHTML = ""; // Clear existing chat
+    chat.innerHTML = "";
     messages.forEach(({ sender, content, timestamp, _id }) => {
-      displayMessage(sender, content, timestamp, _id); // Show each old message
+      displayMessage(sender, content, timestamp, _id);
     });
   });
 
-  // 💬 Listen for new messages in real-time
+  // ✅ Real-time message receive
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
   });
