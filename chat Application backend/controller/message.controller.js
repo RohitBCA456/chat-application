@@ -53,7 +53,8 @@ export const fetchMessageHistory = async (req, res) => {
       return res.status(400).json({ message: "Room ID is required." });
     }
 
-    const messages = await Message.find({ roomId }).sort({ timestamp: 1 });
+    const messages = await Message.find({ roomId }).sort({ timestamp: 1 }); 
+    console.log(messages)
 
     return res.status(200).json({ messages });
   } catch (error) {

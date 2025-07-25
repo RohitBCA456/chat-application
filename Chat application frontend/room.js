@@ -49,6 +49,7 @@ async function fetchMessageHistory(roomId) {
     if (!response.ok) throw new Error("Failed to fetch messages");
     
     const data = await response.json();
+    console.log(data)
     const messages = Array.isArray(data.messages) ? data.messages : [];
     
     const chat = document.getElementById("chat");
