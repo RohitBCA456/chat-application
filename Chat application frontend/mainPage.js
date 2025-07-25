@@ -32,14 +32,8 @@ async function createRoom() {
 
     socket.on("connect", () => {
       console.log("🔌 Connected after room creation");
-      socket.emit("join-room", roomId, (res) => {
-        if (res?.success) {
-          console.log("✅ Room joined immediately after creation");
-          window.location.href = `room.html?room=${roomId}`;
-        } else {
-          alert("❌ Failed to join room after creation.");
-        }
-      });
+      socket.emit("join-room", roomId); // no callback
+      window.location.href = `room.html?room=${roomId}`;
     });
   } catch (error) {
     console.error("❌ Create Room Error:", error);
