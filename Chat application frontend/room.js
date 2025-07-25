@@ -311,19 +311,15 @@ window.deleteMessage = function (btn) {
     return;
   }
 
-  socket.emit(
-    "delete-message",
-    {
-      id: messageId,
-      roomId,
-      username, // Include the username
-    },
-    (response) => {
-      if (response && response.error) {
-        alert(response.error);
-      }
-    }
-  );
+  // Disable button during operation
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+
+  socket.emit("delete-message", {
+    id: messageId,
+    roomId,
+    username,
+  });
 };
 
 // ✅ Delete room

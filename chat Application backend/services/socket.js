@@ -106,29 +106,32 @@ export const setupSocket = (server) => {
 
     // Delete a message in real-time
     // Update the delete-message handler in socket.js
-    socket.on("delete-message", async ({ id, roomId, username }, callback) => {
+    // Update the delete-message handler in socket.js
+    socket.on("delete-message", async ({ id, roomId, username }) => {
       try {
         // Verify room membership
         if (!userRooms.has(roomId)) {
-          return callback({ error: "You must join the room first" });
+          socket.emit("error", "You must join the room first");
+          return;
         }
 
         const message = await Message.findById(id);
         if (!message) {
-          return callback({ error: "Message not found" });
+          socket.emit("error", "Message not found");
+          return;
         }
 
         // Verify ownership
         if (message.sender !== username) {
-          return callback({ error: "You can only delete your own messages" });
+          socket.emit("error", "You can only delete your own messages");
+          return;
         }
 
         await Message.findByIdAndDelete(id);
         io.to(roomId).emit("message-deleted", { id });
-        callback({ success: true });
       } catch (error) {
         console.error("Error deleting message:", error);
-        callback({ error: "Failed to delete message" });
+        socket.emit("error", "Failed to delete message");
       }
     });
 
