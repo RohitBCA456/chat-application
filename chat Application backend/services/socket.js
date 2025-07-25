@@ -17,19 +17,18 @@ export const setupSocket = (server) => {
 
   io.on("connection", (socket) => {
     console.log(`User connected: ${socket.id}`);
+
     let currentRoomId = null;
     let currentUsername = null;
 
-    const verifyRoomMembership = (roomId, username) => {
-      if (!roomMembers.has(roomId) || !roomMembers.get(roomId).has(username)) {
-        throw new Error("You must join the room first");
-      }
+    const safeCallback = (cb, data) => {
+      if (typeof cb === "function") cb(data);
     };
 
-    // Helper function to safely handle callbacks
-    const safeCallback = (callback, response) => {
-      if (typeof callback === 'function') {
-        callback(response);
+    const verifyRoomMembership = (roomId, username) => {
+      const members = roomMembers.get(roomId);
+      if (!members || !members.has(username)) {
+        throw new Error("You must join the room first.");
       }
     };
 
@@ -59,20 +58,18 @@ export const setupSocket = (server) => {
           .sort({ timestamp: 1 })
           .limit(100);
 
-        safeCallback(callback, { status: "success" });
         socket.emit("load-messages", messages);
-        socket.emit("room-joined", { roomId, username });
+        safeCallback(callback, { status: "success" });
       } catch (error) {
         console.error("Join room error:", error);
         safeCallback(callback, { status: "error", message: error.message });
-        socket.emit("room-error", error.message);
       }
     });
 
     socket.on("send-message", async (data, callback = () => {}) => {
       try {
         const { roomId, username, message, tempId } = data;
-        
+
         if (!roomId || !username || !message) {
           throw new Error("Invalid message data");
         }
@@ -87,7 +84,8 @@ export const setupSocket = (server) => {
 
         await newMessage.save();
 
-        io.to(roomId).emit("receive-message", {
+        // Emit to others only (not sender)
+        socket.to(roomId).emit("receive-message", {
           username,
           message,
           timestamp: newMessage.timestamp,
@@ -95,7 +93,12 @@ export const setupSocket = (server) => {
           tempId,
         });
 
-        safeCallback(callback, { status: "success" });
+        // Acknowledge to sender for optimistic update replacement
+        safeCallback(callback, {
+          status: "success",
+          _id: newMessage._id,
+          timestamp: newMessage.timestamp,
+        });
       } catch (error) {
         console.error("Error sending message:", error);
         safeCallback(callback, { status: "error", message: error.message });

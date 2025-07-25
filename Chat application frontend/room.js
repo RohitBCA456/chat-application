@@ -146,42 +146,75 @@ window.editMessage = function (btn) {
   const card = btn.closest(".message");
   const span = card.querySelector("span");
   const oldText = span.textContent.trim();
+  const messageId = card.dataset.id;
+
   const input = document.createElement("input");
+  input.type = "text";
   input.value = oldText;
   input.className = "edit-input";
   span.replaceWith(input);
   input.focus();
 
   btn.textContent = "Save";
-  btn.onclick = () => {
+  btn.onclick = saveEdit;
+
+  function saveEdit() {
     const newText = input.value.trim();
-    if (!newText || newText === oldText) return input.replaceWith(span);
+    if (!newText || newText === oldText) {
+      input.replaceWith(span);
+      btn.textContent = "Edit";
+      btn.onclick = () => editMessage(btn);
+      return;
+    }
 
-    socket.emit("edit-message", {
-      id: card.dataset.id,
-      newText,
-      roomId: document.getElementById("room-id").textContent,
-      username: currentUser,
-    });
+    socket.emit(
+      "edit-message",
+      {
+        id: messageId,
+        newText,
+        roomId: document.getElementById("room-id").textContent,
+        username: currentUser,
+      },
+      (res) => {
+        if (res?.status === "error") {
+          alert("Failed to edit message: " + res.message);
+          return;
+        }
 
-    const newSpan = document.createElement("span");
-    newSpan.innerHTML = linkify(newText);
-    input.replaceWith(newSpan);
-    btn.textContent = "Edit";
-    btn.onclick = () => editMessage(btn);
-  };
+        const updatedSpan = document.createElement("span");
+        updatedSpan.innerHTML = linkify(newText);
+        input.replaceWith(updatedSpan);
+
+        btn.textContent = "Edit";
+        btn.onclick = () => editMessage(btn);
+      }
+    );
+  }
 };
 
 window.deleteMessage = function (btn) {
   const card = btn.closest(".message");
-  const id = card.dataset.id;
+  const messageId = card.dataset.id;
+  const roomId = document.getElementById("room-id").textContent;
+
   if (!confirm("Delete this message?")) return;
 
-  socket.emit("delete-message", {
-    id,
-    roomId: document.getElementById("room-id").textContent,
-    username: currentUser,
-  });
+  socket.emit(
+    "delete-message",
+    {
+      id: messageId,
+      roomId,
+      username: currentUser,
+    },
+    (res) => {
+      if (res?.status === "error") {
+        alert("Failed to delete: " + res.message);
+        return;
+      }
+
+      card.remove(); // Optimistic delete
+    }
+  );
 };
 
 window.togglePin = function (btn) {
