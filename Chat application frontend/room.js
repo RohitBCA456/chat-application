@@ -28,6 +28,47 @@ function initializeChat() {
     currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
 
+  await fetchMessageHistory(currentRoomId);
+
+  // Then setup socket connection
+  setupSocketConnection();
+
+  // Message input handler
+  document.getElementById("message").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      sendMessage();
+    }
+  });
+}
+
+async function fetchMessageHistory(roomId) {
+  try {
+    const response = await fetch(`https://chat-application-howg.onrender.com/messages/${roomId}`);
+    if (!response.ok) throw new Error("Failed to fetch messages");
+    
+    const data = await response.json();
+    const messages = Array.isArray(data.messages) ? data.messages : [];
+    
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+    
+    messages.forEach((message) => {
+      displayMessage(
+        message.sender,
+        message.content,
+        message.createdAt,
+        message._id
+      );
+    });
+    
+    hasLoadedInitialMessages = true;
+  } catch (error) {
+    console.error("Error fetching message history:", error);
+    alert("Failed to load message history. Trying socket connection...");
+  }
+}
+
+
   // Setup socket connection
   setupSocketConnection();
 
