@@ -1,4 +1,3 @@
-// services/socketService.js
 import { Server } from "socket.io";
 import { Message } from "../model/message.model.js";
 
@@ -14,15 +13,15 @@ export const setupSocket = (server) => {
     },
   });
 
-  // Track room memberships globally
+  // Track room memberships with additional metadata
   const roomMembers = new Map();
 
   io.on("connection", (socket) => {
-    console.log("User connected", socket.id);
-    let currentUsername = null;
+    console.log(`User connected: ${socket.id}`);
     let currentRoomId = null;
+    let currentUsername = null;
 
-    // Middleware to verify room membership
+    // Helper function to verify room membership
     const verifyRoomMembership = (roomId, username) => {
       if (!roomMembers.has(roomId) || !roomMembers.get(roomId).has(username)) {
         throw new Error("You must join the room first");
@@ -30,10 +29,23 @@ export const setupSocket = (server) => {
       return true;
     };
 
-    socket.on("join-room", async (roomId, username) => {
+    // Join room with acknowledgement
+    socket.on("join-room", async (roomId, username, callback) => {
       try {
-        currentUsername = username;
+        // Leave previous room if exists
+        if (currentRoomId) {
+          socket.leave(currentRoomId);
+          if (roomMembers.has(currentRoomId)) {
+            roomMembers.get(currentRoomId).delete(currentUsername);
+            if (roomMembers.get(currentRoomId).size === 0) {
+              roomMembers.delete(currentRoomId);
+            }
+          }
+        }
+
+        // Update current state
         currentRoomId = roomId;
+        currentUsername = username;
 
         // Initialize room in map if not exists
         if (!roomMembers.has(roomId)) {
@@ -49,21 +61,30 @@ export const setupSocket = (server) => {
           .sort({ timestamp: 1 })
           .limit(100);
 
-        // ✅ Send messages and confirm join
+        // Send success response
+        callback({ status: "success" });
+        
+        // Emit events
         socket.emit("load-messages", messages);
-        socket.emit("room-joined");
+        socket.emit("room-joined", { roomId, username });
       } catch (error) {
         console.error("Join room error:", error);
+        callback({ status: "error", message: error.message });
         socket.emit("room-error", error.message);
       }
     });
 
-    // Update the send-message handler
-    socket.on("send-message", async (data) => {
-      const { roomId, username, message, tempId } = data;
-
+    // Message handling with proper validation
+    socket.on("send-message", async (data, callback) => {
       try {
-        verifyRoomMembership(roomId, username); // Pass username explicitly
+        const { roomId, username, message, tempId } = data;
+        
+        // Validate input
+        if (!roomId || !username || !message) {
+          throw new Error("Invalid message data");
+        }
+
+        verifyRoomMembership(roomId, username);
 
         const newMessage = new Message({
           roomId,
@@ -82,29 +103,56 @@ export const setupSocket = (server) => {
         };
 
         io.to(roomId).emit("receive-message", messagePayload);
+        callback({ status: "success" });
       } catch (error) {
         console.error("Error sending message:", error);
-        socket.emit("error", error.message);
+        callback({ status: "error", message: error.message });
       }
     });
 
-    socket.on("delete-message", async ({ id, roomId, username }) => {
+    // Edit message handler
+    socket.on("edit-message", async ({ id, newText, roomId, username }, callback) => {
       try {
-        verifyRoomMembership(roomId);
+        verifyRoomMembership(roomId, username);
 
         const message = await Message.findById(id);
         if (!message) throw new Error("Message not found");
-        if (message.sender !== username)
-          throw new Error("You can only delete your own messages");
+        if (message.sender !== username) {
+          throw new Error("You can only edit your own messages");
+        }
 
-        await Message.findByIdAndDelete(id);
-        io.to(roomId).emit("message-deleted", { id });
+        message.content = newText;
+        await message.save();
+
+        io.to(roomId).emit("message-edited", { id, newText });
+        callback({ status: "success" });
       } catch (error) {
-        console.error("Delete message error:", error);
-        socket.emit("error", error.message);
+        console.error("Edit message error:", error);
+        callback({ status: "error", message: error.message });
       }
     });
 
+    // Delete message handler
+    socket.on("delete-message", async ({ id, roomId, username }, callback) => {
+      try {
+        verifyRoomMembership(roomId, username);
+
+        const message = await Message.findById(id);
+        if (!message) throw new Error("Message not found");
+        if (message.sender !== username) {
+          throw new Error("You can only delete your own messages");
+        }
+
+        await Message.findByIdAndDelete(id);
+        io.to(roomId).emit("message-deleted", { id });
+        callback({ status: "success" });
+      } catch (error) {
+        console.error("Delete message error:", error);
+        callback({ status: "error", message: error.message });
+      }
+    });
+
+    // Cleanup on disconnect
     socket.on("disconnect", () => {
       if (currentRoomId && currentUsername) {
         const room = roomMembers.get(currentRoomId);
@@ -115,7 +163,12 @@ export const setupSocket = (server) => {
           }
         }
       }
-      console.log("User disconnected", socket.id);
+      console.log(`User disconnected: ${socket.id}`);
+    });
+
+    // Error handler
+    socket.on("error", (error) => {
+      console.error(`Socket error (${socket.id}):`, error);
     });
   });
 
