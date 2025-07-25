@@ -30,10 +30,10 @@ export const setupSocket = (server) => {
     });
 
     // Send new message
-    socket.on("send-message", async ({ text, roomId, username }, callback) => {
+    socket.on("send-message", async ({ content, roomId, username }, callback) => {
       try {
         const newMessage = new Message({ 
-          text, 
+         content, 
           roomId, 
           sender: username 
         });
