@@ -3,6 +3,7 @@ let socket;
 let currentRoomId = null;
 let currentUser = null;
 let isSocketReady = false;
+let pendingMessages = new Set(); // Track temporary message IDs
 
 document.addEventListener("DOMContentLoaded", initializeChat);
 
@@ -30,14 +31,22 @@ function setupSocketConnection() {
 
   socket = io("https://chat-application-howg.onrender.com", {
     reconnection: true,
-    auth: { username: currentUser.username, roomId: currentRoomId }
+    auth: { 
+      username: currentUser.username, 
+      roomId: currentRoomId,
+      userId: currentUser.userId // Add unique user ID if available
+    }
   });
 
   // Connection handlers
   socket.on("connect", () => {
     console.log("✅ Connected:", socket.id);
     isSocketReady = true;
-    socket.emit("join-room", currentRoomId, currentUser.username);
+    socket.emit("join-room", {
+      roomId: currentRoomId,
+      username: currentUser.username,
+      userId: currentUser.userId || socket.id
+    });
   });
 
   socket.on("disconnect", () => isSocketReady = false);
@@ -55,6 +64,13 @@ function setupSocketConnection() {
   });
 
   socket.on("new-message", (message) => {
+    // Skip if this is our own pending message (will be handled by the callback)
+    if (pendingMessages.has(message._id) || pendingMessages.has(message.tempId)) {
+      pendingMessages.delete(message._id);
+      pendingMessages.delete(message.tempId);
+      return;
+    }
+    
     const chat = document.getElementById("chat");
     if (!document.querySelector(`[data-id="${message._id}"]`)) {
       chat.insertAdjacentHTML("beforeend", createMessageElement(message));
@@ -68,18 +84,6 @@ function setupSocketConnection() {
   });
 }
 
-function createMessageElement(message) {
-  const isCurrentUser = message.sender === currentUser?.username;
-  return `
-    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${message._id || "temp-"+Date.now()}">
-      <div class="message-content">
-        <p><strong>${message.sender}:</strong> <span>${linkify(message.content)}</span></p>
-      </div>
-      <div class="timestamp">${formatTime(message.createdAt)}</div>
-    </div>
-  `;
-}
-
 function sendMessage() {
   if (!isSocketReady) return alert("Connecting... Please wait");
 
@@ -87,8 +91,11 @@ function sendMessage() {
   const content = input.value.trim();
   if (!content) return;
 
-  // Create and display temporary message
+  // Create temporary ID and add to pending set
   const tempId = "temp-" + Date.now();
+  pendingMessages.add(tempId);
+
+  // Create and display temporary message
   document.getElementById("chat").insertAdjacentHTML(
     "beforeend",
     createMessageElement({
@@ -105,15 +112,32 @@ function sendMessage() {
   const chat = document.getElementById("chat");
   chat.scrollTop = chat.scrollHeight;
 
-  // Send to server
-  socket.emit("send-message", { content, roomId: currentRoomId, username: currentUser.username }, 
-    (response) => {
-      if (response?.status === "error") {
-        document.querySelector(`[data-id="${tempId}"]`)?.remove();
-        alert("Send failed: " + response.message);
-      }
+  // Send to server with temporary ID
+  socket.emit("send-message", { 
+    content, 
+    roomId: currentRoomId, 
+    username: currentUser.username,
+    tempId // Include tempId in the message
+  }, (response) => {
+    if (response?.status === "error") {
+      document.querySelector(`[data-id="${tempId}"]`)?.remove();
+      pendingMessages.delete(tempId);
+      alert("Send failed: " + response.message);
     }
-  );
+    // On success, the server will send the real message with the tempId
+  });
+}
+
+function createMessageElement(message) {
+  const isCurrentUser = message.sender === currentUser?.username;
+  return `
+    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${message._id || message.tempId}">
+      <div class="message-content">
+        <p><strong>${message.sender}:</strong> <span>${linkify(message.content)}</span></p>
+      </div>
+      <div class="timestamp">${formatTime(message.createdAt)}</div>
+    </div>
+  `;
 }
 
 // Helper functions

@@ -11,7 +11,7 @@ export const setupSocket = (server) => {
     connectionStateRecovery: {
       maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
       skipMiddlewares: true,
-    }
+    },
   });
 
   io.on("connection", (socket) => {
@@ -33,7 +33,7 @@ export const setupSocket = (server) => {
         }
 
         // Leave previous rooms
-        userRooms.forEach(room => {
+        userRooms.forEach((room) => {
           socket.leave(room);
           userRooms.delete(room);
           console.log(`Left room ${room}`);
@@ -48,77 +48,58 @@ export const setupSocket = (server) => {
         const messages = await Message.find({ roomId })
           .sort({ createdAt: 1 })
           .limit(100);
-        
+
         // Success response
-        callback({ 
+        callback({
           status: "success",
           roomId,
-          messageCount: messages.length
+          messageCount: messages.length,
         });
 
         // Send messages to only this client
-        socket.emit("load-messages", messages.map(msg => ({
-          _id: msg._id,
-          content: msg.content,
-          sender: msg.sender,
-          createdAt: msg.createdAt
-        })));
-
+        socket.emit(
+          "load-messages",
+          messages.map((msg) => ({
+            _id: msg._id,
+            content: msg.content,
+            sender: msg.sender,
+            createdAt: msg.createdAt,
+          }))
+        );
       } catch (error) {
         console.error("Join room error:", error.message);
-        callback({ 
-          status: "error", 
+        callback({
+          status: "error",
           message: error.message,
-          roomId
+          roomId,
         });
       }
     });
 
     // Send message handler with room verification
-    socket.on("send-message", async ({ content, roomId, username }, callback = () => {}) => {
-      try {
-        console.log(`📩 Message received for room ${roomId} from ${username}`);
-        
-        // Validate input
-        if (!content?.trim() || !roomId || !username) {
-          throw new Error("Invalid message data");
+    // In your socket.js (server)
+    socket.on(
+      "send-message",
+      async ({ content, roomId, username, tempId }, callback) => {
+        try {
+          const newMessage = new Message({ content, roomId, sender: username });
+          await newMessage.save();
+
+          // Broadcast including the tempId for reconciliation
+          io.to(roomId).emit("new-message", {
+            _id: newMessage._id,
+            tempId, // Include the temporary ID
+            content: newMessage.content,
+            sender: newMessage.sender,
+            createdAt: newMessage.createdAt,
+          });
+
+          callback({ status: "success" });
+        } catch (error) {
+          callback({ status: "error", message: error.message });
         }
-
-        // Verify sender is in the room
-        if (!userRooms.has(roomId)) {
-          throw new Error("You're not in this room");
-        }
-
-        // Create and save message
-        const newMessage = new Message({ 
-          content: content.trim(), 
-          roomId, 
-          sender: username 
-        });
-        
-        await newMessage.save();
-        console.log(`💾 Message saved with ID: ${newMessage._id}`);
-
-        // Broadcast to all in room including sender
-        io.to(roomId).emit("new-message", {
-          _id: newMessage._id,
-          content: newMessage.content,
-          sender: newMessage.sender,
-          createdAt: newMessage.createdAt
-        });
-        
-        console.log(`📤 Message broadcasted to room ${roomId}`);
-        callback({ status: "success", messageId: newMessage._id });
-
-      } catch (error) {
-        console.error("Send message error:", error.message);
-        callback({ 
-          status: "error", 
-          message: error.message,
-          roomId
-        });
       }
-    });
+    );
 
     // Room management handlers
     socket.on("delete-room", async (roomId, callback = () => {}) => {
