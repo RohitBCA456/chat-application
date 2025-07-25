@@ -164,7 +164,7 @@ function sendMessage() {
   socket.emit(
     "send-message",
     {
-      text: message,
+      content: message,
       roomId: user.roomId,
       username: user.username,
     },
