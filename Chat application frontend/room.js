@@ -43,33 +43,33 @@ async function initializeChat() {
   });
 }
 
-async function fetchMessageHistory(roomId) {
-  try {
-    const response = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
-    if (!response.ok) throw new Error("Failed to fetch messages");
+// async function fetchMessageHistory(roomId) {
+//   try {
+//     const response = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
+//     if (!response.ok) throw new Error("Failed to fetch messages");
     
-    const data = await response.json();
-    console.log(data)
-    const messages = Array.isArray(data.messages) ? data.messages : [];
+//     const data = await response.json();
+//     console.log(data)
+//     const messages = Array.isArray(data.messages) ? data.messages : [];
     
-    const chat = document.getElementById("chat");
-    chat.innerHTML = "";
+//     const chat = document.getElementById("chat");
+//     chat.innerHTML = "";
     
-    messages.forEach((message) => {
-      displayMessage(
-        message.sender,
-        message.content,
-        message.createdAt,
-        message._id
-      );
-    });
+//     messages.forEach((message) => {
+//       displayMessage(
+//         message.sender,
+//         message.content,
+//         message.createdAt,
+//         message._id
+//       );
+//     });
     
-    hasLoadedInitialMessages = true;
-  } catch (error) {
-    console.error("Error fetching message history:", error);
-    alert("Failed to load message history. Trying socket connection...");
-  }
-}
+//     hasLoadedInitialMessages = true;
+//   } catch (error) {
+//     console.error("Error fetching message history:", error);
+//     alert("Failed to load message history. Trying socket connection...");
+//   }
+// }
 
 function setupSocketConnection() {
   socket = io("https://chat-application-howg.onrender.com", {
