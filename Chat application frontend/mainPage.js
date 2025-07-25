@@ -10,18 +10,24 @@ async function createRoom() {
       }
     );
 
-    const createData = await createRes.json();
-    if (!createRes.ok) return alert(createData.message);
+    console.log("🟡 createRes:", createRes);
+
+    const createData = await createRes.json().catch((err) => {
+      console.error("❌ Failed to parse JSON from createRes", err);
+      throw new Error("Invalid JSON from server");
+    });
+
+    console.log("🟢 createData:", createData);
+
+    if (!createRes.ok) return alert(createData.message || "Server error");
 
     const { user: username, roomId } = createData;
 
-    // 💾 Store user info
     localStorage.setItem(
       "user",
       JSON.stringify({ username, roomId, isOwner: true })
     );
 
-    // 🧠 Instead of redirecting immediately, open socket and join the room
     const socket = io("https://chat-application-howg.onrender.com");
 
     socket.on("connect", () => {
@@ -29,7 +35,6 @@ async function createRoom() {
       socket.emit("join-room", roomId, (res) => {
         if (res?.success) {
           console.log("✅ Room joined immediately after creation");
-          // ✅ THEN redirect
           window.location.href = `room.html?room=${roomId}`;
         } else {
           alert("❌ Failed to join room after creation.");
