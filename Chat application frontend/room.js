@@ -21,10 +21,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // ⚡️ Initialize socket connection
   socket = io("https://chat-application-howg.onrender.com");
 
-  // 🔌 On successful connection, join the room
-  socket.on("connect", () => {
-    console.log("✅ Connected to server");
-    socket.emit("join-room", roomId); // 👥 Join the specified chat room
+  // ✅ Wait for connection before emitting join-room
+  function waitForSocketConnection(callback) {
+    if (socket && socket.connected) {
+      callback();
+    } else {
+      setTimeout(() => waitForSocketConnection(callback), 100); // retry every 100ms
+    }
+  }
+
+  waitForSocketConnection(() => {
+    console.log("✅ Connected to server (waited)");
+    socket.emit("join-room", roomId);
   });
 
   // 📨 Load old messages when joining the room (handled by server)
