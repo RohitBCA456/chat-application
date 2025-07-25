@@ -7,24 +7,24 @@ const pendingMessages = new Map();
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
-// Initialize chat
+// Initialize chat when DOM loads
 document.addEventListener("DOMContentLoaded", initializeChat);
+
+/* ========== CORE FUNCTIONS ========== */
 
 function initializeChat() {
   try {
-    // Load user data with validation
+    // Load and validate user data
     const userData = localStorage.getItem("user");
-    if (!userData) {
-      throw new Error("No user data found");
-    }
-
+    if (!userData) throw new Error("No user data found");
+    
     currentUser = JSON.parse(userData);
     if (!currentUser?.roomId || !currentUser?.username) {
       throw new Error("Invalid user data");
     }
     currentRoomId = currentUser.roomId;
 
-    // Update UI
+    // Setup UI and connections
     updateUI();
     setupSocketConnection();
     setupEventListeners();
@@ -36,21 +36,14 @@ function initializeChat() {
   }
 }
 
-function updateUI() {
-  document.getElementById("room-id").textContent = currentRoomId;
-  document.getElementById("username").textContent = currentUser.username;
-  document.getElementById(
-    currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
-  ).style.display = "inline-block";
-}
-
 function setupSocketConnection() {
-  // Cleanup previous connection
+  // Cleanup previous connection if exists
   if (socket) {
     socket.removeAllListeners();
     socket.disconnect();
   }
 
+  // Configure new connection
   socket = io("https://chat-application-howg.onrender.com", {
     reconnection: true,
     reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
@@ -66,81 +59,86 @@ function setupSocketConnection() {
     }
   });
 
-  // Connection events
-  socket.on("connect", () => {
-    console.log("✅ Connected to server with ID:", socket.id);
-    isSocketReady = true;
-    reconnectAttempts = 0;
-    updateConnectionStatus("connected");
-    
-    socket.emit("join-room", currentRoomId, currentUser.username, (response) => {
-      if (response?.status !== "success") {
-        console.error("Join room failed:", response?.message);
-        handleConnectionFailure();
-      }
-    });
-  });
-
-  socket.on("reconnect", (attempt) => {
-    console.log(`♻️ Reconnected after ${attempt} attempts`);
-    isSocketReady = true;
-    updateConnectionStatus("connected");
-  });
-
-  socket.on("reconnecting", (attempt) => {
-    console.log(`Attempting to reconnect (${attempt})...`);
-    updateConnectionStatus("reconnecting");
-  });
-
-  socket.on("reconnect_failed", () => {
-    console.error("Reconnection failed");
-    updateConnectionStatus("disconnected");
-    alert("Connection lost. Please refresh the page.");
-    window.location.reload();
-  });
-
-  socket.on("disconnect", (reason) => {
-    console.log("Disconnected:", reason);
-    isSocketReady = false;
-    updateConnectionStatus("disconnected");
-    
-    if (reason === "io server disconnect") {
-      // Manual reconnection needed
-      setTimeout(() => socket.connect(), 1000);
-    }
-  });
-
+  // Connection event handlers
+  socket.on("connect", handleConnect);
+  socket.on("disconnect", handleDisconnect);
+  socket.on("reconnect", handleReconnect);
+  socket.on("reconnecting", handleReconnecting);
+  socket.on("reconnect_failed", handleReconnectFailed);
+  
   // Message handlers
-  socket.on("load-messages", (messages) => {
-    const chat = document.getElementById("chat");
-    chat.innerHTML = messages.map(msg => createMessageElement(msg)).join("");
-    chat.scrollTop = chat.scrollHeight;
-  });
+  socket.on("load-messages", handleLoadMessages);
+  socket.on("new-message", handleNewMessage);
+  socket.on("room-deleted", handleRoomDeleted);
 
-  socket.on("new-message", (message) => {
-    handleIncomingMessage(message);
-  });
-
-  // Heartbeat
-  setInterval(() => {
-    if (socket.connected) {
-      socket.emit("heartbeat");
-    }
-  }, 20000);
-
-  // Connection quality monitoring
-  setInterval(() => {
-    if (socket.connected) {
-      const start = Date.now();
-      socket.emit("latency-check", () => {
-        const latency = Date.now() - start;
-        console.log("Current latency:", latency + "ms");
-      });
-    }
-  }, 30000);
+  // Heartbeat monitoring
+  startHeartbeat();
+  startLatencyMonitoring();
 }
 
-function handleIncomingMessage(message) {
+function setupEventListeners() {
+  // Message input handler
+  document.getElementById("message").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+
+  // Window beforeunload handler
+  window.addEventListener("beforeunload", () => {
+    if (socket) socket.emit("leave-room", currentRoomId);
+  });
+}
+
+/* ========== SOCKET EVENT HANDLERS ========== */
+
+function handleConnect() {
+  console.log("✅ Connected to server with ID:", socket.id);
+  isSocketReady = true;
+  reconnectAttempts = 0;
+  updateConnectionStatus("connected");
+  
+  socket.emit("join-room", currentRoomId, currentUser.username, (response) => {
+    if (response?.status !== "success") {
+      console.error("Join room failed:", response?.message);
+      handleConnectionFailure();
+    }
+  });
+}
+
+function handleDisconnect(reason) {
+  console.log("Disconnected:", reason);
+  isSocketReady = false;
+  updateConnectionStatus("disconnected");
+  
+  if (reason === "io server disconnect") {
+    setTimeout(() => socket.connect(), 1000);
+  }
+}
+
+function handleReconnect(attempt) {
+  console.log(`♻️ Reconnected after ${attempt} attempts`);
+  isSocketReady = true;
+  updateConnectionStatus("connected");
+}
+
+function handleReconnecting(attempt) {
+  console.log(`Attempting to reconnect (${attempt})...`);
+  updateConnectionStatus("reconnecting");
+}
+
+function handleReconnectFailed() {
+  console.error("Reconnection failed");
+  updateConnectionStatus("disconnected");
+  alert("Connection lost. Please refresh the page.");
+  window.location.reload();
+}
+
+function handleLoadMessages(messages) {
+  const chat = document.getElementById("chat");
+  chat.innerHTML = messages.map(msg => createMessageElement(msg)).join("");
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function handleNewMessage(message) {
   const chat = document.getElementById("chat");
   
   // Check if this replaces a pending message
@@ -154,13 +152,20 @@ function handleIncomingMessage(message) {
     }
   }
   
-  // Only add if new message and not from current user (already shown temporarily)
+  // Only add if new message and not from current user
   if (!document.querySelector(`[data-id="${message._id}"]`) && 
       message.sender !== currentUser.username) {
     chat.insertAdjacentHTML("beforeend", createMessageElement(message));
     chat.scrollTop = chat.scrollHeight;
   }
 }
+
+function handleRoomDeleted() {
+  alert("Room deleted by owner. Redirecting...");
+  redirectToMainPage();
+}
+
+/* ========== MESSAGE FUNCTIONS ========== */
 
 function sendMessage() {
   if (!isSocketReady) {
@@ -201,7 +206,6 @@ function sendMessage() {
   });
 }
 
-// Helper functions
 function createMessageElement(message) {
   const isCurrentUser = message.sender === currentUser.username;
   return `
@@ -214,17 +218,14 @@ function createMessageElement(message) {
   `;
 }
 
-function formatTime(timestamp) {
-  return new Date(timestamp).toLocaleTimeString([], { 
-    hour: "2-digit", 
-    minute: "2-digit" 
-  });
-}
+/* ========== UTILITY FUNCTIONS ========== */
 
-function linkify(text) {
-  return typeof text === "string" 
-    ? text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank">${url}</a>`)
-    : text;
+function updateUI() {
+  document.getElementById("room-id").textContent = currentRoomId;
+  document.getElementById("username").textContent = currentUser.username;
+  document.getElementById(
+    currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
+  ).style.display = "inline-block";
 }
 
 function updateConnectionStatus(status) {
@@ -249,6 +250,26 @@ function showTemporaryMessage(text) {
   setTimeout(() => msg.remove(), 3000);
 }
 
+function startHeartbeat() {
+  setInterval(() => {
+    if (socket.connected) {
+      socket.emit("heartbeat");
+    }
+  }, 20000);
+}
+
+function startLatencyMonitoring() {
+  setInterval(() => {
+    if (socket.connected) {
+      const start = Date.now();
+      socket.emit("latency-check", () => {
+        const latency = Date.now() - start;
+        console.log("Current latency:", latency + "ms");
+      });
+    }
+  }, 30000);
+}
+
 function handleConnectionFailure() {
   setTimeout(() => {
     if (!isSocketReady) {
@@ -264,7 +285,21 @@ function redirectToMainPage() {
   window.location.href = "mainPage.html";
 }
 
-// UI Functions
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString([], { 
+    hour: "2-digit", 
+    minute: "2-digit" 
+  });
+}
+
+function linkify(text) {
+  return typeof text === "string" 
+    ? text.replace(/(https?:\/\/[^\s]+)/g, url => `<a href="${url}" target="_blank">${url}</a>`)
+    : text;
+}
+
+/* ========== UI ACTION HANDLERS ========== */
+
 window.deleteRoom = () => {
   if (confirm("Are you sure you want to delete this room?")) {
     socket.emit("delete-room", currentRoomId, redirectToMainPage);
