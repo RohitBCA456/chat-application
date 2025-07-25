@@ -8,37 +8,52 @@ export const setupSocket = (server) => {
       origin: process.env.CLIENT_URL,
       credentials: true,
     },
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+      skipMiddlewares: true,
+    }
   });
 
   io.on("connection", (socket) => {
     console.log("User connected", socket.id);
 
+    // Track rooms for each socket
+    const userRooms = new Set();
+
     // Join a room and load previous messages
     socket.on("join-room", async (roomId) => {
       try {
-        socket.join(roomId);
+        if (userRooms.has(roomId)) {
+          return socket.emit("joined-room");
+        }
 
-        // Acknowledge join before sending messages
-        socket.emit("joined-room");
+        await socket.join(roomId);
+        userRooms.add(roomId);
 
-        const messages = await Message.find({ roomId }).sort({ timestamp: 1 });
+        // Acknowledge join
+        socket.emit("joined-room", roomId);
 
-        // Now send messages
+        // Load messages with pagination in production
+        const messages = await Message.find({ roomId })
+          .sort({ timestamp: 1 })
+          .limit(100);
+
         socket.emit("load-messages", messages);
       } catch (error) {
-        console.error("Error loading messages:", error);
+        console.error("Error joining room:", error);
+        socket.emit("room-error", "Failed to join room");
       }
     });
 
     // Send a message to room
     socket.on("send-message", async (data) => {
       const { username, roomId, message } = data;
-      try {
-        // Ensure the sender is in the room (safety check)
-        if (!socket.rooms.has(roomId)) {
-          socket.join(roomId);
-        }
+      
+      if (!userRooms.has(roomId)) {
+        return socket.emit("error", "You must join the room first");
+      }
 
+      try {
         const newMessage = new Message({
           roomId,
           sender: username,
@@ -54,50 +69,70 @@ export const setupSocket = (server) => {
           _id: newMessage._id,
         };
 
-        // Emit to everyone in the room except sender
-        socket.to(roomId).emit("receive-message", messagePayload);
-
-        // Emit to sender directly
-        socket.emit("receive-message", messagePayload);
+        // Use io.to() to broadcast to all in room including sender
+        io.to(roomId).emit("receive-message", messagePayload);
       } catch (error) {
         console.error("Error sending message:", error);
+        socket.emit("error", "Failed to send message");
       }
     });
 
     // Edit a message in real-time
     socket.on("edit-message", async ({ id, newText, roomId }) => {
+      if (!userRooms.has(roomId)) {
+        return socket.emit("error", "You must join the room first");
+      }
+
       try {
         const message = await Message.findById(id);
-        if (message) {
-          message.content = newText;
-          await message.save({ validateBeforeSave: false });
-
-          io.to(roomId).emit("message-edited", {
-            id,
-            newText,
-          });
+        if (!message) {
+          return socket.emit("error", "Message not found");
         }
+
+        // Verify sender is the one editing
+        if (message.sender !== socket.request.session?.username) {
+          return socket.emit("error", "You can only edit your own messages");
+        }
+
+        message.content = newText;
+        await message.save({ validateBeforeSave: false });
+
+        io.to(roomId).emit("message-edited", { id, newText });
       } catch (error) {
         console.error("Error editing message:", error);
+        socket.emit("error", "Failed to edit message");
       }
     });
 
     // Delete a message in real-time
     socket.on("delete-message", async ({ id, roomId }) => {
+      if (!userRooms.has(roomId)) {
+        return socket.emit("error", "You must join the room first");
+      }
+
       try {
-        const deleted = await Message.findByIdAndDelete(id);
-        if (deleted) {
-          io.to(roomId).emit("message-deleted", { id });
-          socket.emit("message-deleted", { id }); // Optional direct emit
+        const message = await Message.findById(id);
+        if (!message) {
+          return socket.emit("error", "Message not found");
         }
+
+        // Verify sender is the one deleting (or room owner)
+        if (message.sender !== socket.request.session?.username) {
+          return socket.emit("error", "You can only delete your own messages");
+        }
+
+        await Message.findByIdAndDelete(id);
+        io.to(roomId).emit("message-deleted", { id });
       } catch (error) {
         console.error("Error deleting message:", error);
+        socket.emit("error", "Failed to delete message");
       }
     });
 
     // Handle disconnect
     socket.on("disconnect", () => {
       console.log("User disconnected", socket.id);
+      userRooms.clear();
     });
   });
 

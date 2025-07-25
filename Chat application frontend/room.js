@@ -1,5 +1,6 @@
 // declaring socket as global variable
 let socket;
+let isSocketReady = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   const userData = localStorage.getItem("user");
@@ -14,38 +15,46 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = username;
 
-  // ✅ Join the room and fetch messages after connection established
-  // Ensure socket is connected before emitting
-  function waitForSocketConnection(callback) {
-    if (socket && socket.connected) {
-      callback();
-    } else {
-      setTimeout(() => waitForSocketConnection(callback), 100);
-    }
-  }
-
-  // ✅ Initialize socket only once
-  socket = io("https://chat-application-howg.onrender.com");
-
-  waitForSocketConnection(() => {
-    console.log("✅ Connected to server");
-    socket.emit("join-room", roomId);
-    fetchMessageHistoryAndRender(roomId); // fallback fetch
+  // Initialize socket
+  socket = io("https://chat-application-howg.onrender.com", {
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    autoConnect: true
   });
 
-  // ✅ Real-time receive message
+  // Socket event handlers
+  socket.on("connect", () => {
+    console.log("✅ Connected to server");
+    isSocketReady = true;
+    socket.emit("join-room", roomId);
+  });
+
+  socket.on("disconnect", () => {
+    isSocketReady = false;
+    console.log("Disconnected from server");
+  });
+
+  socket.on("connect_error", (err) => {
+    console.error("Connection error:", err);
+    // Fallback to polling if websocket fails
+    socket.io.opts.transports = ["polling", "websocket"];
+  });
+
+  // Message handlers
   socket.on("receive-message", ({ username, message, timestamp, _id }) => {
     displayMessage(username, message, timestamp, _id);
   });
 
-  // ✅ Load old messages after join-room
   socket.on("load-messages", (messages) => {
-    messages.forEach(({ sender, content, timestamp, _id }) => {
-      displayMessage(sender, content, timestamp, _id);
-    });
+    const chat = document.getElementById("chat");
+    // Clear only if empty to prevent duplicates
+    if (chat.children.length === 0) {
+      messages.forEach(({ sender, content, timestamp, _id }) => {
+        displayMessage(sender, content, timestamp, _id);
+      });
+    }
   });
 
-  // ✅ Edit message in real-time
   socket.on("message-edited", ({ id, newText }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) {
@@ -54,28 +63,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ✅ Delete message in real-time
   socket.on("message-deleted", ({ id }) => {
     const messageCard = document.querySelector(`[data-id="${id}"]`);
     if (messageCard) messageCard.remove();
   });
 
-  // ✅ Send message function
-  window.sendMessage = function () {
-    const input = document.getElementById("message");
-    const message = input.value.trim();
-    if (!message) return;
+  socket.on("error", (errorMsg) => {
+    console.error("Socket error:", errorMsg);
+    alert(errorMsg);
+  });
 
-    socket.emit("send-message", { roomId, username, message });
-    input.value = "";
+  // Fallback message fetch if socket takes too long
+  const fallbackTimer = setTimeout(() => {
+    if (!isSocketReady) {
+      fetchMessageHistoryAndRender(roomId);
+    }
+  }, 2000);
 
-    // Force full reload after sending
-    setTimeout(() => {
-      location.reload(); // refresh the whole page
-    }, 500); // Give server some time to process
-  };
+  // Clean up fallback if socket connects
+  socket.on("connect", () => {
+    clearTimeout(fallbackTimer);
+  });
 });
 
+// ... rest of your room.js code remains the same ...
 // ✅ Make URLs clickable in messages
 function linkify(text) {
   return text.replace(
