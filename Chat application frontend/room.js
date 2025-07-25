@@ -2,6 +2,7 @@
 let socket;
 let isSocketReady = false;
 const messageCache = new Set();
+const messageQueue = []; // Added missing message queue declaration
 
 document.addEventListener("DOMContentLoaded", () => {
   const userData = localStorage.getItem("user");
@@ -24,22 +25,32 @@ document.addEventListener("DOMContentLoaded", () => {
       reconnectionDelay: 1000,
       autoConnect: true,
       auth: { username, roomId },
-      transports: ["websocket", "polling"]
+      transports: ["websocket", "polling"],
     });
 
-    setupSocketHandlers(socket, roomId, username);
+    // Set up all socket event handlers
+    setupSocketHandlers();
+
+    // Process queued messages when connection is restored
+    socket.on("connect", () => {
+      while (messageQueue.length > 0) {
+        const msg = messageQueue.shift();
+        sendMessageNow(msg);
+      }
+    });
   } catch (error) {
     console.error("Socket initialization failed:", error);
     alert("Connection error. Please refresh the page.");
   }
 });
 
-function setupSocketHandlers(socket, roomId, username) {
+function setupSocketHandlers() {
   // Socket event handlers
   socket.on("connect", () => {
     console.log("✅ Connected to server");
     isSocketReady = true;
-    socket.emit("join-room", { roomId, username });
+    const user = JSON.parse(localStorage.getItem("user"));
+    socket.emit("join-room", { roomId: user.roomId, username: user.username });
   });
 
   socket.on("disconnect", () => {
@@ -95,7 +106,8 @@ function setupSocketHandlers(socket, roomId, username) {
   // Fallback message fetch
   const fallbackTimer = setTimeout(() => {
     if (!isSocketReady) {
-      fetchMessageHistoryAndRender(roomId);
+      const user = JSON.parse(localStorage.getItem("user"));
+      fetchMessageHistoryAndRender(user.roomId);
     }
   }, 2000);
 
@@ -130,7 +142,7 @@ window.sendMessage = function () {
     roomId,
     username,
     message,
-    tempId: "temp-" + Date.now()
+    tempId: "temp-" + Date.now(),
   };
 
   displayMessage(username, message, new Date(), messageData.tempId);
@@ -141,9 +153,23 @@ window.sendMessage = function () {
     sendMessageNow(messageData);
   } else {
     messageQueue.push(messageData);
-    alert("Connection unstable. Message will be sent when connection is restored");
+    alert(
+      "Connection unstable. Message will be sent when connection is restored"
+    );
   }
 };
+
+function sendMessageNow({ roomId, username, message, tempId }) {
+  socket.emit("send-message", { roomId, username, message }, (ack) => {
+    const tempMsg = document.querySelector(`[data-id="${tempId}"]`);
+    if (ack?.error) {
+      if (tempMsg) tempMsg.remove();
+      alert("Failed to send: " + ack.error);
+    }
+  });
+}
+
+// ... rest of your existing code ...
 
 function sendMessageNow({ roomId, username, message, tempId }) {
   socket.emit("send-message", { roomId, username, message }, (ack) => {
