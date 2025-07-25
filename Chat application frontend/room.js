@@ -143,7 +143,7 @@ function displayMessage(user, text, timestamp = null, messageId = null) {
   const time = new Date(timestamp || Date.now()).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
-  });
+  })
 
   const content = document.createElement("div");
   content.className = "message-content";
