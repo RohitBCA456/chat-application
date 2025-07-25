@@ -270,51 +270,6 @@ async function fetchMessageHistoryAndRender(roomId) {
   }
 }
 
-// ✅ Display message bubble
-function displayMessage(user, text, timestamp = null, messageId = null) {
-  const chat = document.getElementById("chat");
-  const messageEl = document.createElement("div");
-  messageEl.className = `message ${
-    user === document.getElementById("username").textContent ? "mine" : "other"
-  }`;
-  if (messageId) messageEl.dataset.id = messageId;
-
-  const time = new Date(timestamp || Date.now()).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  const content = document.createElement("div");
-  content.className = "message-content";
-  content.innerHTML = `<p><strong>${user}:</strong> <span>${linkify(
-    text
-  )}</span></p>`;
-
-  const ts = document.createElement("div");
-  ts.className = "timestamp";
-  ts.textContent = time;
-
-  const actionBtns = document.createElement("div");
-  actionBtns.className = "action-buttons";
-
-  if (user === document.getElementById("username").textContent) {
-    actionBtns.innerHTML += `
-      <button onclick="editMessage(this)" class="pop-up-btn edit-btn">Edit</button>
-      <button onclick="deleteMessage(this)" class="pop-up-btn delete-btn">Delete</button>
-    `;
-  }
-
-  const isPinned = messageEl.classList.contains("pinned");
-  actionBtns.innerHTML += `<button onclick="togglePin(this)" class="pop-up-btn pin-btn">${
-    isPinned ? "Unpin" : "Pin"
-  }</button>`;
-
-  content.appendChild(actionBtns);
-  messageEl.append(content, ts);
-  chat.appendChild(messageEl);
-  messageEl.scrollIntoView({ behavior: "smooth" });
-}
-
 // ✅ Edit message functionality
 window.editMessage = function (btn) {
   const messageCard = btn.closest(".message");
