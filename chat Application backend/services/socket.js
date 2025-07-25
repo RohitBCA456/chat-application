@@ -13,7 +13,6 @@ export const setupSocket = (server) => {
     },
   });
 
-  // Track room memberships with additional metadata
   const roomMembers = new Map();
 
   io.on("connection", (socket) => {
@@ -21,18 +20,15 @@ export const setupSocket = (server) => {
     let currentRoomId = null;
     let currentUsername = null;
 
-    // Helper function to verify room membership
     const verifyRoomMembership = (roomId, username) => {
       if (!roomMembers.has(roomId) || !roomMembers.get(roomId).has(username)) {
         throw new Error("You must join the room first");
       }
-      return true;
     };
 
-    // Join room with acknowledgement
-    socket.on("join-room", async (roomId, username, callback) => {
+    // Modified join-room handler with callback check
+    socket.on("join-room", async (roomId, username, callback = () => {}) => {
       try {
-        // Leave previous room if exists
         if (currentRoomId) {
           socket.leave(currentRoomId);
           if (roomMembers.has(currentRoomId)) {
@@ -43,43 +39,41 @@ export const setupSocket = (server) => {
           }
         }
 
-        // Update current state
         currentRoomId = roomId;
         currentUsername = username;
 
-        // Initialize room in map if not exists
         if (!roomMembers.has(roomId)) {
           roomMembers.set(roomId, new Set());
         }
 
-        // Add user to room
         roomMembers.get(roomId).add(username);
         await socket.join(roomId);
 
-        // Load messages
         const messages = await Message.find({ roomId })
           .sort({ timestamp: 1 })
           .limit(100);
 
-        // Send success response
-        callback({ status: "success" });
-        
-        // Emit events
+        // Always check if callback exists before calling
+        if (typeof callback === "function") {
+          callback({ status: "success" });
+        }
+
         socket.emit("load-messages", messages);
         socket.emit("room-joined", { roomId, username });
       } catch (error) {
         console.error("Join room error:", error);
-        callback({ status: "error", message: error.message });
+        if (typeof callback === "function") {
+          callback({ status: "error", message: error.message });
+        }
         socket.emit("room-error", error.message);
       }
     });
 
-    // Message handling with proper validation
-    socket.on("send-message", async (data, callback) => {
+    // Other event handlers remain the same but with callback checks
+    socket.on("send-message", async (data, callback = () => {}) => {
       try {
         const { roomId, username, message, tempId } = data;
-        
-        // Validate input
+
         if (!roomId || !username || !message) {
           throw new Error("Invalid message data");
         }
@@ -94,43 +88,49 @@ export const setupSocket = (server) => {
 
         await newMessage.save();
 
-        const messagePayload = {
+        io.to(roomId).emit("receive-message", {
           username,
           message,
           timestamp: newMessage.timestamp,
           _id: newMessage._id,
           tempId,
-        };
+        });
 
-        io.to(roomId).emit("receive-message", messagePayload);
-        callback({ status: "success" });
+        if (typeof callback === "function") {
+          callback({ status: "success" });
+        }
       } catch (error) {
         console.error("Error sending message:", error);
-        callback({ status: "error", message: error.message });
+        if (typeof callback === "function") {
+          callback({ status: "error", message: error.message });
+        }
       }
     });
 
     // Edit message handler
-    socket.on("edit-message", async ({ id, newText, roomId, username }, callback) => {
-      try {
-        verifyRoomMembership(roomId, username);
+    socket.on(
+      "edit-message",
+      async ({ id, newText, roomId, username }, callback) => {
+        try {
+          verifyRoomMembership(roomId, username);
 
-        const message = await Message.findById(id);
-        if (!message) throw new Error("Message not found");
-        if (message.sender !== username) {
-          throw new Error("You can only edit your own messages");
+          const message = await Message.findById(id);
+          if (!message) throw new Error("Message not found");
+          if (message.sender !== username) {
+            throw new Error("You can only edit your own messages");
+          }
+
+          message.content = newText;
+          await message.save();
+
+          io.to(roomId).emit("message-edited", { id, newText });
+          callback({ status: "success" });
+        } catch (error) {
+          console.error("Edit message error:", error);
+          callback({ status: "error", message: error.message });
         }
-
-        message.content = newText;
-        await message.save();
-
-        io.to(roomId).emit("message-edited", { id, newText });
-        callback({ status: "success" });
-      } catch (error) {
-        console.error("Edit message error:", error);
-        callback({ status: "error", message: error.message });
       }
-    });
+    );
 
     // Delete message handler
     socket.on("delete-message", async ({ id, roomId, username }, callback) => {
@@ -153,7 +153,7 @@ export const setupSocket = (server) => {
     });
 
     // Cleanup on disconnect
-    socket.on("disconnect", () => {
+     socket.on("disconnect", () => {
       if (currentRoomId && currentUsername) {
         const room = roomMembers.get(currentRoomId);
         if (room) {
@@ -164,11 +164,6 @@ export const setupSocket = (server) => {
         }
       }
       console.log(`User disconnected: ${socket.id}`);
-    });
-
-    // Error handler
-    socket.on("error", (error) => {
-      console.error(`Socket error (${socket.id}):`, error);
     });
   });
 
