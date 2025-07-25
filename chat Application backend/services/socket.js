@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { Message } from "../model/message.model.js";
-import { Room } from "../model/room.model.js"; // Make sure to import your Room model
+import { Room } from "../model/room.model.js";
 
 export const setupSocket = (server) => {
   const io = new Server(server, {
@@ -13,16 +13,32 @@ export const setupSocket = (server) => {
   io.on("connection", (socket) => {
     console.log("Socket connected:", socket.id);
 
+    // Track room memberships
+    const userRooms = new Set();
+
     // Join specific room
-    socket.on("join-room", async (roomId, username, callback) => {
+    socket.on("join-room", async (roomId, username, callback = () => {}) => {
       try {
+        // Leave all previous rooms
+        userRooms.forEach(room => {
+          socket.leave(room);
+          userRooms.delete(room);
+        });
+
         socket.join(roomId);
+        userRooms.add(roomId);
+
         const messages = await Message.find({ roomId })
           .sort({ createdAt: 1 })
           .limit(100);
         
         callback({ status: "success" });
-        socket.emit("load-messages", messages);
+        socket.emit("load-messages", messages.map(msg => ({
+          _id: msg._id,
+          content: msg.content,
+          sender: msg.sender,
+          createdAt: msg.createdAt
+        })));
       } catch (error) {
         console.error("Join room error:", error);
         callback({ status: "error", message: error.message });
@@ -30,10 +46,14 @@ export const setupSocket = (server) => {
     });
 
     // Send new message
-    socket.on("send-message", async ({ content, roomId, username }, callback) => {
+    socket.on("send-message", async ({ content, roomId, username }, callback = () => {}) => {
       try {
+        if (!content || !roomId || !username) {
+          throw new Error("Missing required fields");
+        }
+
         const newMessage = new Message({ 
-         content, 
+          content, 
           roomId, 
           sender: username 
         });
@@ -41,7 +61,7 @@ export const setupSocket = (server) => {
         await newMessage.save();
         io.to(roomId).emit("new-message", {
           _id: newMessage._id,
-          text: newMessage.text,
+          content: newMessage.content,
           sender: newMessage.sender,
           createdAt: newMessage.createdAt
         });
@@ -54,7 +74,7 @@ export const setupSocket = (server) => {
     });
 
     // Delete room
-    socket.on("delete-room", async (roomId, callback) => {
+    socket.on("delete-room", async (roomId, callback = () => {}) => {
       try {
         // Delete all messages in the room
         await Message.deleteMany({ roomId });
@@ -72,8 +92,20 @@ export const setupSocket = (server) => {
       }
     });
 
+    // Leave room
+    socket.on("leave-room", (roomId, callback = () => {}) => {
+      try {
+        socket.leave(roomId);
+        userRooms.delete(roomId);
+        callback({ status: "success" });
+      } catch (error) {
+        callback({ status: "error", message: error.message });
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log("Socket disconnected:", socket.id);
+      userRooms.clear();
     });
   });
 

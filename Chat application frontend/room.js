@@ -1,6 +1,7 @@
 // Global state
 let socket;
 let currentRoomId = null;
+let currentUser = null;
 
 // Initialize the application
 document.addEventListener("DOMContentLoaded", () => {
@@ -15,15 +16,20 @@ function initializeChat() {
     return;
   }
 
-  const user = JSON.parse(userData);
-  currentRoomId = user.roomId;
+  currentUser = JSON.parse(userData);
+  currentRoomId = currentUser.roomId;
 
   // Update UI
-  document.getElementById("room-id").textContent = user.roomId;
-  document.getElementById("username").textContent = user.username;
+  document.getElementById("room-id").textContent = currentUser.roomId;
+  document.getElementById("username").textContent = currentUser.username;
+  
+  // Show appropriate button
+  document.getElementById(
+    currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
+  ).style.display = "inline-block";
 
   // Setup socket connection
-  setupSocketConnection(user);
+  setupSocketConnection();
 
   // Message input handler
   document.getElementById("message").addEventListener("keypress", (e) => {
@@ -31,41 +37,20 @@ function initializeChat() {
       sendMessage();
     }
   });
-
-  // Leave room button
-  document.getElementById("leave-room-btn").addEventListener("click", () => {
-    if (confirm("Are you sure you want to leave the room?")) {
-      localStorage.removeItem("user");
-      window.location.href = "mainPage.html";
-    }
-  });
 }
 
-function setupSocketConnection(user) {
+function setupSocketConnection() {
   socket = io("https://chat-application-howg.onrender.com", {
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     auth: {
-      username: user.username,
+      username: currentUser.username,
     },
   });
 
   socket.on("connect", () => {
     console.log("✅ Connected to server");
-
-    socket.emit("join-room", user.roomId, user.username, (response) => {
-      if (response?.status === "error") {
-        alert(`Failed to join room: ${response.message}`);
-      } else {
-        console.log("✅ Successfully joined room");
-      }
-    });
-  });
-
-  socket.on("room-deleted", () => {
-    alert("This room has been deleted by the owner. You will be redirected.");
-    localStorage.removeItem("user");
-    window.location.href = "mainPage.html";
+    socket.emit("join-room", currentRoomId, currentUser.username);
   });
 
   socket.on("disconnect", () => {
@@ -79,11 +64,11 @@ function setupSocketConnection(user) {
   socket.on("load-messages", (messages) => {
     const chat = document.getElementById("chat");
     chat.innerHTML = "";
-
+    
     messages.forEach((message) => {
       displayMessage(
         message.sender,
-        message.text,
+        message.content,
         message.createdAt,
         message._id
       );
@@ -93,10 +78,16 @@ function setupSocketConnection(user) {
   socket.on("new-message", (message) => {
     displayMessage(
       message.sender,
-      message.text,
+      message.content,
       message.createdAt,
       message._id
     );
+  });
+
+  socket.on("room-deleted", () => {
+    alert("This room has been deleted by the owner. You will be redirected.");
+    localStorage.removeItem("user");
+    window.location.href = "mainPage.html";
   });
 
   socket.on("error", (errorMsg) => {
@@ -105,14 +96,12 @@ function setupSocketConnection(user) {
   });
 }
 
-function displayMessage(sender, text, timestamp, messageId) {
+function displayMessage(sender, content, timestamp, messageId) {
   const chat = document.getElementById("chat");
-
+  
   const messageEl = document.createElement("div");
   messageEl.className = `message ${
-    sender === document.getElementById("username").textContent
-      ? "mine"
-      : "other"
+    sender === currentUser.username ? "mine" : "other"
   }`;
 
   if (messageId) {
@@ -124,17 +113,13 @@ function displayMessage(sender, text, timestamp, messageId) {
     minute: "2-digit",
   });
 
-  const content = document.createElement("div");
-  content.className = "message-content";
-  content.innerHTML = `<p><strong>${sender}:</strong> <span>${linkify(
-    text
-  )}</span></p>`;
+  messageEl.innerHTML = `
+    <div class="message-content">
+      <p><strong>${sender}:</strong> <span>${linkify(content)}</span></p>
+    </div>
+    <div class="timestamp">${time}</div>
+  `;
 
-  const ts = document.createElement("div");
-  ts.className = "timestamp";
-  ts.textContent = time;
-
-  messageEl.append(content, ts);
   chat.appendChild(messageEl);
   messageEl.scrollIntoView({ behavior: "smooth" });
 }
@@ -148,24 +133,23 @@ function linkify(text) {
 }
 
 function sendMessage() {
-  const user = JSON.parse(localStorage.getItem("user"));
   const input = document.getElementById("message");
-  const message = input.value.trim();
+  const content = input.value.trim();
 
-  if (!message || !socket || !socket.connected) return;
+  if (!content || !socket || !socket.connected) return;
 
   // Optimistic UI update
   const tempId = "temp-" + Date.now();
-  displayMessage(user.username, message, new Date(), tempId);
+  displayMessage(currentUser.username, content, new Date(), tempId);
   input.value = "";
   input.focus();
 
   socket.emit(
     "send-message",
     {
-      content: message,
-      roomId: user.roomId,
-      username: user.username,
+      content,
+      roomId: currentRoomId,
+      username: currentUser.username,
     },
     (response) => {
       if (response?.status === "error") {
@@ -177,32 +161,13 @@ function sendMessage() {
   );
 }
 
-window.leaveRoom = function () {
-  if (confirm("Are you sure you want to leave the room?")) {
-    localStorage.removeItem("user");
-    window.location.href = "mainPage.html";
-  }
-};
-
-// Add this to your existing room.js file
-
 // Delete room function
-window.deleteRoom = function () {
-  const user = JSON.parse(localStorage.getItem("user"));
-  if (!user?.isOwner) {
-    alert("Only room owner can delete the room");
+window.deleteRoom = function() {
+  if (!confirm("Are you sure you want to delete this room? All messages will be lost.")) {
     return;
   }
 
-  if (
-    !confirm(
-      "Are you sure you want to delete this room? This cannot be undone."
-    )
-  ) {
-    return;
-  }
-
-  socket.emit("delete-room", user.roomId, (response) => {
+  socket.emit("delete-room", currentRoomId, (response) => {
     if (response?.status === "success") {
       localStorage.removeItem("user");
       window.location.href = "mainPage.html";
@@ -210,4 +175,14 @@ window.deleteRoom = function () {
       alert("Failed to delete room: " + (response?.message || "Unknown error"));
     }
   });
+};
+
+// Leave room function
+window.leaveRoom = function() {
+  if (confirm("Are you sure you want to leave the room?")) {
+    socket.emit("leave-room", currentRoomId, () => {
+      localStorage.removeItem("user");
+      window.location.href = "mainPage.html";
+    });
+  }
 };
