@@ -87,6 +87,24 @@ function setupSocketConnection() {
   });
 
   socket.on("new-message", (message) => {
+    // Check if a temp message for this user and content already exists
+    const tempMsg = Array.from(document.querySelectorAll(".message.mine")).find(
+      (el) =>
+        !el.dataset.id?.startsWith("temp-")
+          ? false
+          : el.querySelector("span")?.textContent === message.content
+    );
+
+    if (tempMsg) {
+      // Replace temp ID with real ID and update timestamp
+      tempMsg.dataset.id = message._id;
+      tempMsg.querySelector(".timestamp").textContent = new Date(
+        message.createdAt
+      ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return; // Don't add a duplicate
+    }
+
+    // Only show if not already shown
     displayMessage(
       message.sender,
       message.content,
