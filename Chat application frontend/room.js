@@ -2,13 +2,14 @@
 let socket;
 let currentRoomId = null;
 let currentUser = null;
+let hasLoadedInitialMessages = false;
 
 // Initialize the application
 document.addEventListener("DOMContentLoaded", () => {
   initializeChat();
 });
 
-async function initializeChat() {
+function initializeChat() {
   const userData = localStorage.getItem("user");
   if (!userData) {
     alert("User not found. Redirecting to main page.");
@@ -28,11 +29,7 @@ async function initializeChat() {
     currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
   ).style.display = "inline-block";
 
-  
-
- await fetchMessageHistory(currentRoomId);
-
-  // Then setup socket connection
+  // Setup socket connection
   setupSocketConnection();
 
   // Message input handler
@@ -42,34 +39,6 @@ async function initializeChat() {
     }
   });
 }
-
-// async function fetchMessageHistory(roomId) {
-//   try {
-//     const response = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
-//     if (!response.ok) throw new Error("Failed to fetch messages");
-    
-//     const data = await response.json();
-//     console.log(data)
-//     const messages = Array.isArray(data.messages) ? data.messages : [];
-    
-//     const chat = document.getElementById("chat");
-//     chat.innerHTML = "";
-    
-//     messages.forEach((message) => {
-//       displayMessage(
-//         message.sender,
-//         message.content,
-//         message.createdAt,
-//         message._id
-//       );
-//     });
-    
-//     hasLoadedInitialMessages = true;
-//   } catch (error) {
-//     console.error("Error fetching message history:", error);
-//     alert("Failed to load message history. Trying socket connection...");
-//   }
-// }
 
 function setupSocketConnection() {
   socket = io("https://chat-application-howg.onrender.com", {
@@ -95,9 +64,19 @@ function setupSocketConnection() {
 
   socket.on("load-messages", (messages) => {
     const chat = document.getElementById("chat");
-    chat.innerHTML = "";
     
-    messages.forEach((message) => {
+    // Only clear chat if it's the initial load
+    if (!hasLoadedInitialMessages) {
+      chat.innerHTML = "";
+      hasLoadedInitialMessages = true;
+    }
+
+    // Filter out messages we've already displayed
+    const newMessages = messages.filter(msg => 
+      !document.querySelector(`[data-id="${msg._id}"]`)
+    );
+
+    newMessages.forEach((message) => {
       displayMessage(
         message.sender,
         message.content,
@@ -129,6 +108,11 @@ function setupSocketConnection() {
 }
 
 function displayMessage(sender, content, timestamp, messageId) {
+  // Don't display if we already have this message
+  if (messageId && document.querySelector(`[data-id="${messageId}"]`)) {
+    return;
+  }
+
   const chat = document.getElementById("chat");
   
   const messageEl = document.createElement("div");
