@@ -8,6 +8,7 @@ import roomRouter from "./router/room.router.js";
 import http from "http";
 import cookieParser from "cookie-parser";
 import { setupSocket } from "./services/socket.js";
+import { logger } from "./middleware/logger.js";
 // configuring .env file to load the environment variables
 dotenv.config({ path: ".env" });
 
@@ -16,6 +17,7 @@ const app = express();
 //essential setup for the data flow
 app.use(express.json());
 app.use(cookieParser());
+app.use(logger)
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 

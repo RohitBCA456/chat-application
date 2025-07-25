@@ -32,5 +32,6 @@ async function login() {
   } catch (error) {
     // consoling the error if any occured
     console.log(error);
+    alert('error while logging in', error)
   }
 }
