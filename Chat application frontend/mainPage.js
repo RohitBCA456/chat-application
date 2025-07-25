@@ -30,7 +30,12 @@ async function createRoom() {
 
     const socket = io("https://chat-application-howg.onrender.com");
 
-    window.location.href = `room.html?room=${roomId}`;
+    socket.on("connect", () => {
+      console.log("🔌 Connected after room creation");
+      socket.emit("join-room", roomId); // no callback
+      window.location.href = `room.html?room=${roomId}`;
+    });
+    
   } catch (error) {
     console.error("❌ Create Room Error:", error);
     alert("Something went wrong while creating room.");
