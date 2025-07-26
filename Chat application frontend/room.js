@@ -194,19 +194,10 @@ function handleLeaveRoom() {
 
 function handleDeleteRoom() {
   if (confirm("Delete room and all messages?")) {
-    fetch("https://chat-application-howg.onrender.com/room/deleteroom", {
-      method: "DELETE",
-      credentials: "include",
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        alert(data.message);
-        if (data.message.includes("deleted")) redirectToMainPage();
-      })
-      .catch((err) => {
-        console.error("Delete failed", err);
-        alert("Something went wrong.");
-      });
+    socket.emit("delete-room", roomId, (res) => {
+      if (res?.status === "success") redirectToMainPage();
+      else alert("Error deleting room");
+    });
   }
 }
 

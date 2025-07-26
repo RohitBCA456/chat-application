@@ -32,6 +32,38 @@ export const setupSocket = (server) => {
       if (conn) conn.lastActive = Date.now();
     });
 
+    // Delete room
+    socket.on("delete-room", async (roomId, callback = () => {}) => {
+      try {
+        // Verify room exists
+        const room = await Room.findOne({ roomId });
+        if (!room) {
+          throw new Error("Room not found");
+        }
+
+        // Delete all messages in the room
+        await Message.deleteMany({ roomId });
+
+        // Delete the room itself
+        await Room.deleteOne({ roomId });
+
+        // Notify all clients in the room
+        io.to(roomId).emit("room-deleted");
+
+        // Disconnect all clients in the room
+        const socketsInRoom = await io.in(roomId).fetchSockets();
+        socketsInRoom.forEach((s) => {
+          s.leave(roomId);
+          s.emit("room-deleted");
+        });
+
+        callback({ status: "success" });
+      } catch (error) {
+        console.error(`Delete room error: ${error.message}`);
+        callback({ status: "error", message: error.message });
+      }
+    });
+
     // Join Room
     const joinRoomHandler = async (roomId, username, callback = () => {}) => {
       try {
@@ -148,36 +180,6 @@ export const setupSocket = (server) => {
         socket.emit("leave-room-success");
       } catch (err) {
         console.error(`❌ Leave room error: ${err.message}`);
-        callback({ status: "error", message: err.message });
-      }
-    });
-
-    socket.on("delete-room", async (roomId, callback = () => {}) => {
-      try {
-        const room = await Room.findOne({ roomId });
-        if (!room) throw new Error("Room not found");
-
-        // Delete messages
-        await Message.deleteMany({ roomId });
-
-        // Delete room
-        await Room.deleteOne({ roomId });
-
-        console.log(`🗑️ Room ${roomId} deleted along with all messages`);
-
-        // Notify all clients in that room
-        io.to(roomId).emit("room-deleted");
-        socket.emit("room-deleted"); // 💥 Notify deleter too, in case they're not in room
-
-        // Disconnect all sockets from the room
-        const socketsInRoom = await io.in(roomId).fetchSockets();
-        for (const s of socketsInRoom) {
-          s.leave(roomId);
-        }
-
-        callback({ status: "success" });
-      } catch (err) {
-        console.error(`❌ Delete room error: ${err.message}`);
         callback({ status: "error", message: err.message });
       }
     });
