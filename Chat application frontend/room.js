@@ -1,6 +1,6 @@
 // Global state
 let socket;
-let currentRoomId = null;
+let roomId = null;
 let currentUser = null;
 let isSocketReady = false;
 const pendingMessages = new Map();
@@ -9,11 +9,7 @@ const MAX_RECONNECT_ATTEMPTS = 10;
 let latestMessageId = null;
 
 function startBackupPolling(interval = 5000) {
-  setInterval(() => {
-    if (!isSocketReady || !socket.connected) {
-      fetchLatestMessagesFromServer();
-    }
-  }, interval);
+  setInterval(fetchLatestMessagesFromServer, interval);
 }
 
 // Initialize chat when DOM loads
@@ -31,7 +27,7 @@ function initializeChat() {
       throw new Error("Invalid user data");
     }
 
-    currentRoomId = currentUser.roomId;
+    roomId = currentUser.roomId;
 
     updateUI();
     setupSocketConnection();
@@ -41,7 +37,7 @@ function initializeChat() {
     alert("Error initializing chat: " + error.message);
     redirectToMainPage();
   }
-  startBackupPolling();
+  startBackupPolling()
 }
 
 function setupSocketConnection() {
@@ -60,7 +56,7 @@ function setupSocketConnection() {
     transports: ["websocket", "polling"],
     auth: {
       username: currentUser.username,
-      roomId: currentRoomId,
+      roomId: roomId,
       lastDisconnect: performance.now(),
     },
   });
@@ -81,12 +77,10 @@ function setupSocketConnection() {
 }
 
 async function fetchLatestMessagesFromServer() {
-  if (!currentRoomId) return;
+  if (!roomId) return;
 
   try {
-    const res = await fetch(
-      `https://chat-application-howg.onrender.com/messages/${currentRoomId}`
-    );
+    const res = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
     if (!res.ok) throw new Error("Failed to fetch");
 
     const messages = await res.json();
@@ -97,10 +91,7 @@ async function fetchLatestMessagesFromServer() {
     });
 
     if (newMessages.length) {
-      console.log(
-        "🌀 Fallback polling found new messages:",
-        newMessages.length
-      );
+      console.log("🌀 Fallback polling found new messages:", newMessages.length);
       const chat = document.getElementById("chat");
       newMessages.forEach((msg) => {
         chat.insertAdjacentHTML("beforeend", createMessageElement(msg));
@@ -133,7 +124,7 @@ function handleConnect() {
   reconnectAttempts = 0;
 
   // Ensure we have all required data before joining
-  if (!currentRoomId || !currentUser?.username) {
+  if (!roomId || !currentUser?.username) {
     console.error("Missing room ID or username");
     return;
   }
@@ -148,7 +139,7 @@ function handleConnect() {
 
     socket.emit(
       "join-room",
-      currentRoomId,
+      roomId,
       currentUser.username,
       (response) => {
         if (response?.status === "success") {
@@ -225,7 +216,7 @@ function handleNewMessage(message) {
 
 function handleRoomDeleted() {
   if (confirm("Are you sure you want to delete the room?")) {
-    socket.emit("delete-room", currentRoomId, (response) => {
+    socket.emit("delete-room", roomId, (response) => {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
@@ -245,7 +236,7 @@ function handleLeaveRoomSuccess() {
 
 function handleLeaveRoom() {
   if (confirm("Are you sure you want to leave the room?")) {
-    socket.emit("leave-room", currentRoomId, (response) => {
+    socket.emit("leave-room", roomId, (response) => {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
@@ -263,7 +254,7 @@ function handleDeleteRoom() {
       "Are you sure you want to delete this room? All messages will be lost."
     )
   ) {
-    socket.emit("delete-room", currentRoomId, (response) => {
+    socket.emit("delete-room", roomId, (response) => {
       if (response?.status === "success") {
         redirectToMainPage();
       } else {
@@ -308,7 +299,7 @@ function sendMessage() {
     "send-message",
     {
       content,
-      roomId: currentRoomId,
+      roomId: roomId,
       username: currentUser.username,
       tempId,
     },
@@ -341,7 +332,7 @@ function createMessageElement(message) {
 /* ========== UTILITY FUNCTIONS ========== */
 
 function updateUI() {
-  document.getElementById("room-id").textContent = currentRoomId;
+  document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = currentUser.username;
   document.getElementById(
     currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
