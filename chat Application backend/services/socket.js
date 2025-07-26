@@ -29,42 +29,43 @@ export const setupSocket = (server) => {
     // Heartbeat ping
     socket.on("heartbeat", () => {
       const conn = activeConnections.get(socket.id);
-      if (conn) {
-        conn.lastActive = Date.now();
-      }
+      if (conn) conn.lastActive = Date.now();
     });
 
-    // JOIN ROOM HANDLER
+    // Join Room
     const joinRoomHandler = async (roomId, username, callback = () => {}) => {
       try {
         const roomExists = await Room.exists({ roomId });
         if (!roomExists) throw new Error(`Room ${roomId} doesn't exist`);
 
-        if (socket.rooms.has(roomId)) {
-          console.log(`⚠️ ${username} already in room ${roomId}`);
-          callback({ status: "success", alreadyJoined: true });
-          return;
-        }
-
-        // Leave all other rooms
-        for (const r of socket.rooms) {
-          if (r !== socket.id) {
-            socket.leave(r);
-            console.log(`🔄 Left old room ${r}`);
+        // 🧹 Remove all sockets of same username (optional if tracking)
+        const socketsInRoom = await io.in(roomId).fetchSockets();
+        for (const s of socketsInRoom) {
+          if (s.id !== socket.id) {
+            s.leave(roomId);
+            console.log(`🧼 Removed socket ${s.id} from ${roomId}`);
           }
         }
 
+        // 🚪 Leave previous rooms
+        for (const r of socket.rooms) {
+          if (r !== socket.id) {
+            socket.leave(r);
+            console.log(`🚪 Left previous room: ${r}`);
+          }
+        }
+
+        // ✅ Join new room
         await socket.join(roomId);
         console.log(`👤 ${username} joined ${roomId}`);
         console.log(`🧩 ${socket.id} rooms now:`, Array.from(socket.rooms));
 
-        // Log all sockets in room
-        const socketsInRoom = await io.in(roomId).fetchSockets();
-        console.log(`📌 Room ${roomId} has ${socketsInRoom.length} socket(s):`, socketsInRoom.map(s => s.id));
-
         const messages = await Message.find({ roomId })
           .sort({ createdAt: 1 })
           .limit(100);
+
+        const updatedSockets = await io.in(roomId).fetchSockets();
+        console.log(`📌 Room ${roomId} has ${updatedSockets.length} socket(s):`, updatedSockets.map(s => s.id));
 
         socket.emit("load-messages", messages);
         callback({ status: "success", messageCount: messages.length });
@@ -74,17 +75,16 @@ export const setupSocket = (server) => {
         console.error(`Join error for ${socket.id}:`, error.message);
         callback({ status: "error", message: error.message });
 
+        // Retry after short delay
         setTimeout(() => {
-          if (socket.connected) {
-            joinRoomHandler(roomId, username, callback);
-          }
+          if (socket.connected) joinRoomHandler(roomId, username, callback);
         }, 2000);
       }
     };
 
     socket.on("join-room", joinRoomHandler);
 
-    // SEND MESSAGE
+    // Send message
     socket.on("send-message", async ({ content, roomId, username, tempId }, callback = () => {}) => {
       try {
         if (!content?.trim() || !roomId || !username) {
@@ -99,7 +99,7 @@ export const setupSocket = (server) => {
         await newMessage.save();
 
         const socketsInRoom = await io.in(roomId).fetchSockets();
-        console.log(`📡 Emitting message to ${socketsInRoom.length} clients in room ${roomId}:`, socketsInRoom.map(s => s.id));
+        console.log(`📡 Emitting message to ${socketsInRoom.length} clients in ${roomId}:`, socketsInRoom.map(s => s.id));
 
         io.to(roomId).emit("new-message", {
           ...newMessage.toObject(),
@@ -117,7 +117,7 @@ export const setupSocket = (server) => {
       }
     });
 
-    // INACTIVITY CHECK
+    // Inactivity timeout
     const connectionCheck = setInterval(() => {
       const conn = activeConnections.get(socket.id);
       if (conn && Date.now() - conn.lastActive > 45000) {
@@ -126,7 +126,6 @@ export const setupSocket = (server) => {
       }
     }, 30000);
 
-    // DISCONNECT
     socket.on("disconnect", (reason) => {
       clearInterval(connectionCheck);
       const conn = activeConnections.get(socket.id);
@@ -138,13 +137,12 @@ export const setupSocket = (server) => {
       }
     });
 
-    // ERROR HANDLER
     socket.on("error", (error) => {
       console.error(`⚠️ Socket error for ${socket.id}:`, error.message);
     });
   });
 
-  // SERVER MONITOR
+  // Server-wide connection count
   setInterval(() => {
     console.log(`🌐 Active connections: ${activeConnections.size}`);
   }, 60000);
