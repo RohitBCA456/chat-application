@@ -167,6 +167,7 @@ export const setupSocket = (server) => {
 
         // Notify all clients in that room
         io.to(roomId).emit("room-deleted");
+        socket.emit("room-deleted"); // 💥 Notify deleter too, in case they're not in room
 
         // Disconnect all sockets from the room
         const socketsInRoom = await io.in(roomId).fetchSockets();

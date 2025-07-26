@@ -144,6 +144,14 @@ function handleNewMessage(message) {
   }
 }
 
+function handleRoomDeleted() {
+  if (confirm("Room deleted. Exit now?")) redirectToMainPage();
+}
+
+function handleLeaveRoomSuccess() {
+  redirectToMainPage();
+}
+
 // ================== CONTINUOUS FETCHING ==================
 
 function startContinuousMessageFetch(interval = 2000) {
