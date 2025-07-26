@@ -101,34 +101,25 @@ function handleConnect() {
   isSocketReady = true;
   reconnectAttempts = 0;
 
-  const joinRoomWithRetry = (attempt = 1) => {
-    if (attempt > 5) {
-      alert("Failed to join room. Please refresh the page.");
-      return;
+  if (roomJoined) return; // ✅ prevent re-joining multiple times
+
+  socket.emit("join-room", roomId, currentUser.username, (response) => {
+    if (response?.status === "success") {
+      console.log("✅ Joined room");
+      roomJoined = true;
+      pendingMessages.clear();
+    } else {
+      console.error("❌ Failed to join room:", response);
     }
-
-    socket.emit("join-room", roomId, currentUser.username, (response) => {
-      if (response?.status === "success") {
-        console.log("✅ Joined room");
-        roomJoined = true; // ✅ SET after successful join
-        pendingMessages.clear();
-      } else {
-        setTimeout(() => joinRoomWithRetry(attempt + 1), 500 * attempt);
-      }
-    });
-  };
-
-  joinRoomWithRetry();
+  });
 }
-
 
 function handleDisconnect(reason) {
   console.log("Disconnected:", reason);
   isSocketReady = false;
-  if (reason === "io server disconnect") {
-    setTimeout(() => socket.connect(), 1000);
-  }
+  roomJoined = false; // ✅ reset on disconnect
 }
+
 
 function handleReconnect(attempt) {
   console.log(`♻️ Reconnected after ${attempt} attempts`);
