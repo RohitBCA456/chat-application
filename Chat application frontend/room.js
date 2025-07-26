@@ -157,7 +157,9 @@ function handleNewMessage(message) {
     const tempEl = document.querySelector(`[data-id="${message.tempId}"]`);
     if (tempEl) {
       tempEl.dataset.id = message._id;
-      tempEl.querySelector(".timestamp").textContent = formatTime(message.createdAt);
+      tempEl.querySelector(".timestamp").textContent = formatTime(
+        message.createdAt
+      );
       pendingMessages.delete(message.tempId);
       latestMessageId = message._id;
       return;
@@ -188,29 +190,31 @@ async function fetchLatestMessagesFromServer() {
   if (!roomId) return;
 
   try {
-    const url = latestMessageId
-      ? `https://chat-application-howg.onrender.com/message/messages/${roomId}?after=${latestMessageId}`
-      : `https://chat-application-howg.onrender.com/message/messages/${roomId}`;
+    const res = await fetch(
+      `https://chat-application-howg.onrender.com/message/messages/${roomId}`
+    );
+    if (!res.ok) throw new Error("Failed to fetch");
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Fetch failed");
+    const data = await res.json();
+    const messages = data.messages; // ✅ fix here
 
-    const messages = await res.json();
-    const chat = document.getElementById("chat");
-
-    messages.forEach((msg) => {
-      if (!document.querySelector(`[data-id="${msg._id}"]`)) {
-        chat.insertAdjacentHTML("beforeend", createMessageElement(msg));
-        latestMessageId = msg._id;
-      }
+    const newMessages = messages.filter((msg) => {
+      return !document.querySelector(`[data-id="${msg._id}"]`);
     });
 
-    if (messages.length > 0) {
+    if (newMessages.length) {
+      console.log(
+        "🌀 Fallback polling found new messages:",
+        newMessages.length
+      );
+      const chat = document.getElementById("chat");
+      newMessages.forEach((msg) => {
+        chat.insertAdjacentHTML("beforeend", createMessageElement(msg));
+      });
       chat.scrollTop = chat.scrollHeight;
-      console.log("🌀 Fallback polling received:", messages.length);
     }
-  } catch (err) {
-    console.error("Polling failed:", err.message);
+  } catch (error) {
+    console.error("Fallback polling failed:", error);
   }
 }
 
@@ -290,9 +294,13 @@ function sendMessage() {
 function createMessageElement(message) {
   const isCurrentUser = message.sender === currentUser.username;
   return `
-    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${message._id || message.tempId}">
+    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${
+    message._id || message.tempId
+  }">
       <div class="message-content">
-        <p><strong>${message.sender}:</strong> <span>${linkify(message.content)}</span></p>
+        <p><strong>${message.sender}:</strong> <span>${linkify(
+    message.content
+  )}</span></p>
       </div>
       <div class="timestamp">${formatTime(message.createdAt)}</div>
     </div>
@@ -351,6 +359,9 @@ function formatTime(timestamp) {
 
 function linkify(text) {
   return typeof text === "string"
-    ? text.replace(/(https?:\/\/[^\s]+)/g, (url) => `<a href="${url}" target="_blank">${url}</a>`)
+    ? text.replace(
+        /(https?:\/\/[^\s]+)/g,
+        (url) => `<a href="${url}" target="_blank">${url}</a>`
+      )
     : text;
 }
