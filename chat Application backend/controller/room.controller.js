@@ -5,13 +5,13 @@ import { Message } from "../model/message.model.js";
 const deleteRoom = async (req, res) => {
   try {
     const userId = req.user?._id;
-    console.log(userId)
+    console.log(userId);
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized user" });
     }
 
     const user = await User.findById(userId);
-    console.log(user)
+    console.log(user);
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
