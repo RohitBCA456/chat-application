@@ -18,8 +18,9 @@ document.getElementById("room-id").innerText = roomId;
 document.getElementById("username").innerText = username;
 
 // Show/Hide delete/leave buttons
-document.getElementById(isOwner ? "delete-room-btn" : "leave-room-btn").style.display =
-  "inline-block";
+document.getElementById(
+  isOwner ? "delete-room-btn" : "leave-room-btn"
+).style.display = "inline-block";
 
 // Join room
 socket.emit("join-room", { roomId, username });
@@ -57,9 +58,12 @@ socket.on("error", (msg) => {
 });
 
 // Send message
+// Send message
 function sendMessage() {
   const content = messageInput.value.trim();
   if (!content) return;
+
+  console.log("📤 Sending message:", content); // ✅ Debug
 
   socket.emit("send-message", {
     content,
@@ -69,6 +73,12 @@ function sendMessage() {
 
   messageInput.value = "";
 }
+
+// Listen for new message from server
+socket.on("new-message", (msg) => {
+  console.log("📥 New message received:", msg); // ✅ Debug
+  appendMessage(msg);
+});
 
 // Leave room
 function handleLeaveRoom() {
