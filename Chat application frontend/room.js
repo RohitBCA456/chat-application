@@ -15,7 +15,8 @@ function initializeChat() {
     if (!userData) throw new Error("No user data found");
 
     currentUser = JSON.parse(userData);
-    if (!currentUser?.roomId || !currentUser?.username) throw new Error("Invalid user data");
+    if (!currentUser?.roomId || !currentUser?.username)
+      throw new Error("Invalid user data");
 
     roomId = currentUser.roomId;
 
@@ -60,26 +61,37 @@ function setupEventListeners() {
     if (e.key === "Enter") sendMessage();
   });
 
-  document.getElementById("leave-room-btn")?.addEventListener("click", handleLeaveRoom);
-  document.getElementById("delete-room-btn")?.addEventListener("click", handleDeleteRoom);
+  document
+    .getElementById("leave-room-btn")
+    ?.addEventListener("click", handleLeaveRoom);
+  document
+    .getElementById("delete-room-btn")
+    ?.addEventListener("click", handleDeleteRoom);
 }
 
 // ================== SOCKET HANDLERS ==================
 
 function handleConnect() {
   console.log("✅ Connected to server with ID:", socket.id);
-  if (roomJoined) return;
+  isSocketReady = true;
+  reconnectAttempts = 0;
+  roomJoined = false; // 🔁 Always reset
 
   const joinRoomWithRetry = (attempt = 1) => {
-    if (attempt > 5) return alert("Failed to join room. Please refresh.");
+    if (attempt > 5) {
+      alert("Failed to join room. Please refresh the page.");
+      return;
+    }
 
-    socket.emit("join-room", roomId, currentUser.username, (res) => {
-      if (res?.status === "success") {
+    if (roomJoined) return; // ✅ Prevent duplicate retry
+
+    socket.emit("join-room", roomId, currentUser.username, (response) => {
+      if (response?.status === "success") {
         console.log("✅ Joined room");
         roomJoined = true;
         pendingMessages.clear();
       } else {
-        console.warn(`Join attempt ${attempt} failed:`, res?.message);
+        console.warn(`🔁 Join attempt ${attempt} failed:`, response?.message);
         setTimeout(() => joinRoomWithRetry(attempt + 1), 500 * attempt);
       }
     });
@@ -115,7 +127,9 @@ function handleNewMessage(message) {
     const tempEl = document.querySelector(`[data-id="${message.tempId}"]`);
     if (tempEl) {
       tempEl.dataset.id = message._id;
-      tempEl.querySelector(".timestamp").textContent = formatTime(message.createdAt);
+      tempEl.querySelector(".timestamp").textContent = formatTime(
+        message.createdAt
+      );
       pendingMessages.delete(message.tempId);
       latestMessageId = message._id;
       return;
@@ -146,13 +160,17 @@ function startContinuousMessageFetch(interval = 2000) {
 
 async function fetchLatestMessagesFromServer() {
   try {
-    const res = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
+    const res = await fetch(
+      `https://chat-application-howg.onrender.com/message/messages/${roomId}`
+    );
     if (!res.ok) throw new Error("Failed to fetch messages");
 
     const { messages } = await res.json();
     const chat = document.getElementById("chat");
 
-    const newMessages = messages.filter((msg) => !document.querySelector(`[data-id="${msg._id}"]`));
+    const newMessages = messages.filter(
+      (msg) => !document.querySelector(`[data-id="${msg._id}"]`)
+    );
     newMessages.forEach((msg) => {
       chat.insertAdjacentHTML("beforeend", createMessageElement(msg));
     });
@@ -186,7 +204,8 @@ function handleDeleteRoom() {
 // ================== MESSAGE SEND ==================
 
 function sendMessage() {
-  if (!isSocketReady || !socket.connected || !roomJoined) return showTemporaryMessage("Connecting...");
+  if (!isSocketReady || !socket.connected || !roomJoined)
+    return showTemporaryMessage("Connecting...");
 
   const input = document.getElementById("message");
   const content = input.value.trim();
@@ -196,25 +215,32 @@ function sendMessage() {
   pendingMessages.set(tempId, true);
 
   const chat = document.getElementById("chat");
-  chat.insertAdjacentHTML("beforeend", createMessageElement({
-    _id: tempId,
-    sender: currentUser.username,
-    content,
-    createdAt: new Date(),
-  }));
+  chat.insertAdjacentHTML(
+    "beforeend",
+    createMessageElement({
+      _id: tempId,
+      sender: currentUser.username,
+      content,
+      createdAt: new Date(),
+    })
+  );
 
   input.value = "";
   chat.scrollTop = chat.scrollHeight;
 
-  socket.emit("send-message", { content, roomId, username: currentUser.username, tempId }, async (res) => {
-    if (res?.status === "failed") {
-      document.querySelector(`[data-id="${tempId}"]`)?.remove();
-      pendingMessages.delete(tempId);
-      showTemporaryMessage("❌ Message failed");
-    } else {
-      await fetchLatestMessagesFromServer(); // ensure sync
+  socket.emit(
+    "send-message",
+    { content, roomId, username: currentUser.username, tempId },
+    async (res) => {
+      if (res?.status === "failed") {
+        document.querySelector(`[data-id="${tempId}"]`)?.remove();
+        pendingMessages.delete(tempId);
+        showTemporaryMessage("❌ Message failed");
+      } else {
+        await fetchLatestMessagesFromServer(); // ensure sync
+      }
     }
-  });
+  );
 }
 
 // ================== UI HELPERS ==================
@@ -222,9 +248,13 @@ function sendMessage() {
 function createMessageElement(msg) {
   const isMe = msg.sender === currentUser.username;
   return `
-    <div class="message ${isMe ? "mine" : "other"}" data-id="${msg._id || msg.tempId}">
+    <div class="message ${isMe ? "mine" : "other"}" data-id="${
+    msg._id || msg.tempId
+  }">
       <div class="message-content">
-        <p><strong>${msg.sender}:</strong> <span>${linkify(msg.content)}</span></p>
+        <p><strong>${msg.sender}:</strong> <span>${linkify(
+    msg.content
+  )}</span></p>
       </div>
       <div class="timestamp">${formatTime(msg.createdAt)}</div>
     </div>`;
@@ -233,7 +263,9 @@ function createMessageElement(msg) {
 function updateUI() {
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = currentUser.username;
-  document.getElementById(currentUser.isOwner ? "delete-room-btn" : "leave-room-btn").style.display = "inline-block";
+  document.getElementById(
+    currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
+  ).style.display = "inline-block";
 }
 
 function redirectToMainPage() {
@@ -251,12 +283,18 @@ function showTemporaryMessage(text) {
 }
 
 function formatTime(ts) {
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function linkify(text) {
   return typeof text === "string"
-    ? text.replace(/(https?:\/\/[^\s]+)/g, (url) => `<a href="${url}" target="_blank">${url}</a>`)
+    ? text.replace(
+        /(https?:\/\/[^\s]+)/g,
+        (url) => `<a href="${url}" target="_blank">${url}</a>`
+      )
     : text;
 }
 
