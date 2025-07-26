@@ -196,6 +196,7 @@ async function fetchLatestMessagesFromServer() {
     if (!res.ok) throw new Error("Failed to fetch");
 
     const data = await res.json();
+    console.log(data)
     const messages = data.messages; // ✅ fix here
 
     const newMessages = messages.filter((msg) => {
@@ -281,11 +282,14 @@ function sendMessage() {
       username: currentUser.username,
       tempId,
     },
-    (response) => {
+    async (response) => {
       if (response?.status === "failed") {
         document.querySelector(`[data-id="${tempId}"]`)?.remove();
         pendingMessages.delete(tempId);
         showTemporaryMessage("Failed to send message.");
+      } else {
+        // ✅ Fetch latest messages after successful server confirmation
+        await fetchLatestMessagesFromServer();
       }
     }
   );
