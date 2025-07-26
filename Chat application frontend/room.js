@@ -101,18 +101,29 @@ function handleConnect() {
   isSocketReady = true;
   reconnectAttempts = 0;
 
-  if (roomJoined) return; // ✅ prevent re-joining multiple times
+  if (roomJoined) return; // ✅ Already joined, skip
 
-  socket.emit("join-room", roomId, currentUser.username, (response) => {
-    if (response?.status === "success") {
-      console.log("✅ Joined room");
-      roomJoined = true;
-      pendingMessages.clear();
-    } else {
-      console.error("❌ Failed to join room:", response);
+  const joinRoomWithRetry = (attempt = 1) => {
+    if (attempt > 5) {
+      alert("Failed to join room. Please refresh the page.");
+      return;
     }
-  });
+
+    socket.emit("join-room", roomId, currentUser.username, (response) => {
+      if (response?.status === "success") {
+        console.log("✅ Joined room");
+        roomJoined = true;
+        pendingMessages.clear();
+      } else {
+        console.warn(`🔁 Join attempt ${attempt} failed:`, response?.message);
+        setTimeout(() => joinRoomWithRetry(attempt + 1), 500 * attempt);
+      }
+    });
+  };
+
+  joinRoomWithRetry(); // ✅ Start retry logic
 }
+
 
 function handleDisconnect(reason) {
   console.log("Disconnected:", reason);
@@ -120,11 +131,13 @@ function handleDisconnect(reason) {
   roomJoined = false; // ✅ reset on disconnect
 }
 
-
 function handleReconnect(attempt) {
   console.log(`♻️ Reconnected after ${attempt} attempts`);
   isSocketReady = true;
+  roomJoined = false; // ✅ Reset the flag
+  handleConnect(); // 🔁 Re-run join logic
 }
+
 
 function handleReconnecting(attempt) {
   console.log(`Reconnecting... (${attempt})`);
@@ -190,7 +203,7 @@ async function fetchLatestMessagesFromServer() {
     if (!res.ok) throw new Error("Failed to fetch");
 
     const data = await res.json();
-    console.log(data)
+    console.log(data);
     const messages = data.messages; // ✅ fix here
 
     const newMessages = messages.filter((msg) => {
