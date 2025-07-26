@@ -1,5 +1,6 @@
 async function createRoom() {
   try {
+    // 1. Create the room
     const createRes = await fetch(
       "https://chat-application-howg.onrender.com/user/createroom",
       {
@@ -12,24 +13,56 @@ async function createRoom() {
     const createData = await createRes.json();
     if (!createRes.ok) return alert(createData.message);
 
-    // Save user info to localStorage
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        username: createData.user,
-        roomId: createData.roomId,
-        isOwner: true,
-      })
-    );
+    // 2. Save user info to localStorage
+    const userData = {
+      username: createData.user,
+      roomId: createData.roomId,
+      isOwner: true,
+    };
+    localStorage.setItem("user", JSON.stringify(userData));
 
-    // Add a small delay to ensure room is properly created on server
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // 3. Initialize socket connection BEFORE redirecting
+    const socket = io("https://chat-application-howg.onrender.com", {
+      reconnection: true,
+      auth: {
+        username: userData.username,
+        roomId: userData.roomId,
+      },
+    });
 
-    // Redirect to room page
-    window.location.href = `room.html?room=${createData.roomId}`;
+    // 4. Wait for connection and join room
+    await new Promise((resolve, reject) => {
+      socket.on("connect", () => {
+        console.log("Connected to socket, joining room...");
+        socket.emit(
+          "join-room",
+          userData.roomId,
+          userData.username,
+          (response) => {
+            if (response?.status === "success") {
+              resolve();
+            } else {
+              reject(new Error(response?.message || "Failed to join room"));
+            }
+          }
+        );
+      });
+
+      socket.on("connect_error", (err) => {
+        reject(err);
+      });
+
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        reject(new Error("Connection timeout"));
+      }, 5000);
+    });
+
+    // 5. Only redirect after successful join
+    window.location.href = `room.html?room=${userData.roomId}`;
   } catch (error) {
     console.error("Create Room Error:", error);
-    alert("Something went wrong while creating room.");
+    alert(`Failed to create room: ${error.message}`);
   }
 }
 
