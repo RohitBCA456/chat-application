@@ -6,7 +6,7 @@ import { Room } from "../model/room.model.js";
 export const setupSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL,
+      origin: "*",
       credentials: true,
     },
   });

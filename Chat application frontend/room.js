@@ -1,6 +1,9 @@
 // room.js
 
-const socket = io("https://chat-application-howg.onrender.com");
+const socket = io("https://chat-application-howg.onrender.com", {
+  transports: ["websocket"],
+});
+
 
 // Get user data from localStorage
 const userData = localStorage.getItem("user");
