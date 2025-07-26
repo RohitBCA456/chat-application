@@ -3,23 +3,10 @@ let socket;
 let roomId = null;
 let currentUser = null;
 let isSocketReady = false;
+let roomJoined = false;
 const pendingMessages = new Map();
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
 let latestMessageId = null;
-let roomJoined = false; // NEW
 
-// Start backup polling
-function startBackupPolling(interval = 5000) {
-  setInterval(() => {
-    if (!isSocketReady || !socket?.connected) {
-      console.log("⚠️ Polling fallback active...");
-      fetchLatestMessagesFromServer();
-    }
-  }, interval);
-}
-
-// Initialize chat
 document.addEventListener("DOMContentLoaded", initializeChat);
 
 function initializeChat() {
@@ -28,16 +15,14 @@ function initializeChat() {
     if (!userData) throw new Error("No user data found");
 
     currentUser = JSON.parse(userData);
-    if (!currentUser?.roomId || !currentUser?.username) {
-      throw new Error("Invalid user data");
-    }
+    if (!currentUser?.roomId || !currentUser?.username) throw new Error("Invalid user data");
 
     roomId = currentUser.roomId;
 
     updateUI();
     setupSocketConnection();
     setupEventListeners();
-    startBackupPolling();
+    startContinuousMessageFetch(); // ✅ Auto-fetch messages every 2s
   } catch (error) {
     console.error("Initialization error:", error);
     alert("Error initializing chat: " + error.message);
@@ -53,32 +38,21 @@ function setupSocketConnection() {
 
   socket = io("https://chat-application-howg.onrender.com", {
     reconnection: true,
-    reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+    reconnectionAttempts: 10,
     reconnectionDelay: 1000,
-    reconnectionDelayMax: 10000,
-    randomizationFactor: 0.5,
-    timeout: 20000,
     transports: ["websocket", "polling"],
-    auth: {
-      username: currentUser.username,
-      roomId,
-      lastDisconnect: performance.now(),
-    },
+    auth: { username: currentUser.username, roomId },
   });
 
   socket.on("connect", handleConnect);
   socket.on("disconnect", handleDisconnect);
   socket.on("reconnect", handleReconnect);
-  socket.on("reconnecting", handleReconnecting);
-  socket.on("reconnect_failed", handleReconnectFailed);
-
   socket.on("load-messages", handleLoadMessages);
   socket.on("new-message", handleNewMessage);
   socket.on("room-deleted", handleRoomDeleted);
   socket.on("leave-room-success", handleLeaveRoomSuccess);
 
   startHeartbeat();
-  startLatencyMonitoring();
 }
 
 function setupEventListeners() {
@@ -86,74 +60,51 @@ function setupEventListeners() {
     if (e.key === "Enter") sendMessage();
   });
 
-  document
-    .getElementById("leave-room-btn")
-    ?.addEventListener("click", handleLeaveRoom);
-  document
-    .getElementById("delete-room-btn")
-    ?.addEventListener("click", handleDeleteRoom);
+  document.getElementById("leave-room-btn")?.addEventListener("click", handleLeaveRoom);
+  document.getElementById("delete-room-btn")?.addEventListener("click", handleDeleteRoom);
 }
 
-// ================= SOCKET HANDLERS =================
+// ================== SOCKET HANDLERS ==================
 
 function handleConnect() {
   console.log("✅ Connected to server with ID:", socket.id);
-  isSocketReady = true;
-  reconnectAttempts = 0;
-
-  if (roomJoined) return; // ✅ Already joined, skip
+  if (roomJoined) return;
 
   const joinRoomWithRetry = (attempt = 1) => {
-    if (attempt > 5) {
-      alert("Failed to join room. Please refresh the page.");
-      return;
-    }
+    if (attempt > 5) return alert("Failed to join room. Please refresh.");
 
-    socket.emit("join-room", roomId, currentUser.username, (response) => {
-      if (response?.status === "success") {
+    socket.emit("join-room", roomId, currentUser.username, (res) => {
+      if (res?.status === "success") {
         console.log("✅ Joined room");
         roomJoined = true;
         pendingMessages.clear();
       } else {
-        console.warn(`🔁 Join attempt ${attempt} failed:`, response?.message);
+        console.warn(`Join attempt ${attempt} failed:`, res?.message);
         setTimeout(() => joinRoomWithRetry(attempt + 1), 500 * attempt);
       }
     });
   };
 
-  joinRoomWithRetry(); // ✅ Start retry logic
+  joinRoomWithRetry();
 }
 
-
 function handleDisconnect(reason) {
-  console.log("Disconnected:", reason);
+  console.warn("🔌 Disconnected:", reason);
   isSocketReady = false;
-  roomJoined = false; // ✅ reset on disconnect
+  roomJoined = false;
 }
 
 function handleReconnect(attempt) {
   console.log(`♻️ Reconnected after ${attempt} attempts`);
   isSocketReady = true;
-  roomJoined = false; // ✅ Reset the flag
-  handleConnect(); // 🔁 Re-run join logic
-}
-
-
-function handleReconnecting(attempt) {
-  console.log(`Reconnecting... (${attempt})`);
-}
-
-function handleReconnectFailed() {
-  alert("Reconnection failed. Please refresh the page.");
-  window.location.reload();
+  roomJoined = false;
+  handleConnect(); // rejoin
 }
 
 function handleLoadMessages(messages) {
   const chat = document.getElementById("chat");
-  chat.innerHTML = messages.map((msg) => createMessageElement(msg)).join("");
-  if (messages.length > 0) {
-    latestMessageId = messages[messages.length - 1]._id;
-  }
+  chat.innerHTML = messages.map(createMessageElement).join("");
+  if (messages.length > 0) latestMessageId = messages[messages.length - 1]._id;
   chat.scrollTop = chat.scrollHeight;
 }
 
@@ -164,9 +115,7 @@ function handleNewMessage(message) {
     const tempEl = document.querySelector(`[data-id="${message.tempId}"]`);
     if (tempEl) {
       tempEl.dataset.id = message._id;
-      tempEl.querySelector(".timestamp").textContent = formatTime(
-        message.createdAt
-      );
+      tempEl.querySelector(".timestamp").textContent = formatTime(message.createdAt);
       pendingMessages.delete(message.tempId);
       latestMessageId = message._id;
       return;
@@ -182,83 +131,62 @@ function handleNewMessage(message) {
 }
 
 function handleRoomDeleted() {
-  if (confirm("Room deleted. Exit now?")) {
-    redirectToMainPage();
-  }
+  if (confirm("Room deleted. Exit now?")) redirectToMainPage();
 }
 
 function handleLeaveRoomSuccess() {
   redirectToMainPage();
 }
 
-// ================= FETCH FALLBACK =================
+// ================== CONTINUOUS FETCHING ==================
+
+function startContinuousMessageFetch(interval = 2000) {
+  setInterval(fetchLatestMessagesFromServer, interval);
+}
 
 async function fetchLatestMessagesFromServer() {
-  if (!roomId) return;
-
   try {
-    const res = await fetch(
-      `https://chat-application-howg.onrender.com/message/messages/${roomId}`
-    );
-    if (!res.ok) throw new Error("Failed to fetch");
+    const res = await fetch(`https://chat-application-howg.onrender.com/message/messages/${roomId}`);
+    if (!res.ok) throw new Error("Failed to fetch messages");
 
-    const data = await res.json();
-    console.log(data);
-    const messages = data.messages; // ✅ fix here
+    const { messages } = await res.json();
+    const chat = document.getElementById("chat");
 
-    const newMessages = messages.filter((msg) => {
-      return !document.querySelector(`[data-id="${msg._id}"]`);
+    const newMessages = messages.filter((msg) => !document.querySelector(`[data-id="${msg._id}"]`));
+    newMessages.forEach((msg) => {
+      chat.insertAdjacentHTML("beforeend", createMessageElement(msg));
     });
 
-    if (newMessages.length) {
-      console.log(
-        "🌀 Fallback polling found new messages:",
-        newMessages.length
-      );
-      const chat = document.getElementById("chat");
-      newMessages.forEach((msg) => {
-        chat.insertAdjacentHTML("beforeend", createMessageElement(msg));
-      });
-      chat.scrollTop = chat.scrollHeight;
-    }
-  } catch (error) {
-    console.error("Fallback polling failed:", error);
+    if (newMessages.length) chat.scrollTop = chat.scrollHeight;
+  } catch (err) {
+    console.error("Message fetch failed:", err.message);
   }
 }
 
-// ================= ROOM ACTIONS =================
+// ================== ROOM ACTIONS ==================
 
 function handleLeaveRoom() {
-  if (confirm("Are you sure you want to leave this room?")) {
-    socket.emit("leave-room", roomId, (response) => {
-      if (response?.status === "success") {
-        redirectToMainPage();
-      } else {
-        alert("Error leaving room");
-      }
+  if (confirm("Leave this room?")) {
+    socket.emit("leave-room", roomId, (res) => {
+      if (res?.status === "success") redirectToMainPage();
+      else alert("Error leaving room");
     });
   }
 }
 
 function handleDeleteRoom() {
-  if (confirm("Delete this room and all messages?")) {
-    socket.emit("delete-room", roomId, (response) => {
-      if (response?.status === "success") {
-        redirectToMainPage();
-      } else {
-        alert("Error deleting room");
-      }
+  if (confirm("Delete room and all messages?")) {
+    socket.emit("delete-room", roomId, (res) => {
+      if (res?.status === "success") redirectToMainPage();
+      else alert("Error deleting room");
     });
   }
 }
 
-// ================= MESSAGE =================
+// ================== MESSAGE SEND ==================
 
 function sendMessage() {
-  if (!isSocketReady || !socket.connected || !roomJoined) {
-    showTemporaryMessage("Connecting... Please wait");
-    return;
-  }
+  if (!isSocketReady || !socket.connected || !roomJoined) return showTemporaryMessage("Connecting...");
 
   const input = document.getElementById("message");
   const content = input.value.trim();
@@ -268,91 +196,44 @@ function sendMessage() {
   pendingMessages.set(tempId, true);
 
   const chat = document.getElementById("chat");
-  chat.insertAdjacentHTML(
-    "beforeend",
-    createMessageElement({
-      _id: tempId,
-      sender: currentUser.username,
-      content,
-      createdAt: new Date(),
-    })
-  );
+  chat.insertAdjacentHTML("beforeend", createMessageElement({
+    _id: tempId,
+    sender: currentUser.username,
+    content,
+    createdAt: new Date(),
+  }));
 
   input.value = "";
   chat.scrollTop = chat.scrollHeight;
 
-  socket.emit(
-    "send-message",
-    {
-      content,
-      roomId,
-      username: currentUser.username,
-      tempId,
-    },
-    async (response) => {
-      if (response?.status === "failed") {
-        document.querySelector(`[data-id="${tempId}"]`)?.remove();
-        pendingMessages.delete(tempId);
-        showTemporaryMessage("Failed to send message.");
-      } else {
-        // ✅ Fetch fresh messages to ensure sync
-        await fetchLatestMessagesFromServer();
-      }
+  socket.emit("send-message", { content, roomId, username: currentUser.username, tempId }, async (res) => {
+    if (res?.status === "failed") {
+      document.querySelector(`[data-id="${tempId}"]`)?.remove();
+      pendingMessages.delete(tempId);
+      showTemporaryMessage("❌ Message failed");
+    } else {
+      await fetchLatestMessagesFromServer(); // ensure sync
     }
-  );
+  });
 }
 
-function createMessageElement(message) {
-  const isCurrentUser = message.sender === currentUser.username;
+// ================== UI HELPERS ==================
+
+function createMessageElement(msg) {
+  const isMe = msg.sender === currentUser.username;
   return `
-    <div class="message ${isCurrentUser ? "mine" : "other"}" data-id="${
-    message._id || message.tempId
-  }">
+    <div class="message ${isMe ? "mine" : "other"}" data-id="${msg._id || msg.tempId}">
       <div class="message-content">
-        <p><strong>${message.sender}:</strong> <span>${linkify(
-    message.content
-  )}</span></p>
+        <p><strong>${msg.sender}:</strong> <span>${linkify(msg.content)}</span></p>
       </div>
-      <div class="timestamp">${formatTime(message.createdAt)}</div>
-    </div>
-  `;
+      <div class="timestamp">${formatTime(msg.createdAt)}</div>
+    </div>`;
 }
-
-// ================= UTILS =================
 
 function updateUI() {
   document.getElementById("room-id").textContent = roomId;
   document.getElementById("username").textContent = currentUser.username;
-  document.getElementById(
-    currentUser.isOwner ? "delete-room-btn" : "leave-room-btn"
-  ).style.display = "inline-block";
-}
-
-function showTemporaryMessage(text) {
-  const chat = document.getElementById("chat");
-  const msg = document.createElement("div");
-  msg.className = "system-message";
-  msg.textContent = text;
-  chat.appendChild(msg);
-  setTimeout(() => msg.remove(), 3000);
-}
-
-function startHeartbeat() {
-  setInterval(() => {
-    if (socket.connected) socket.emit("heartbeat");
-  }, 20000);
-}
-
-function startLatencyMonitoring() {
-  setInterval(() => {
-    if (socket.connected) {
-      const start = Date.now();
-      socket.emit("latency-check", () => {
-        const latency = Date.now() - start;
-        console.log("⏱️ Latency:", latency + "ms");
-      });
-    }
-  }, 30000);
+  document.getElementById(currentUser.isOwner ? "delete-room-btn" : "leave-room-btn").style.display = "inline-block";
 }
 
 function redirectToMainPage() {
@@ -361,18 +242,26 @@ function redirectToMainPage() {
   window.location.href = "mainPage.html";
 }
 
-function formatTime(timestamp) {
-  return new Date(timestamp).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function showTemporaryMessage(text) {
+  const msg = document.createElement("div");
+  msg.className = "system-message";
+  msg.textContent = text;
+  document.getElementById("chat").appendChild(msg);
+  setTimeout(() => msg.remove(), 3000);
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function linkify(text) {
   return typeof text === "string"
-    ? text.replace(
-        /(https?:\/\/[^\s]+)/g,
-        (url) => `<a href="${url}" target="_blank">${url}</a>`
-      )
+    ? text.replace(/(https?:\/\/[^\s]+)/g, (url) => `<a href="${url}" target="_blank">${url}</a>`)
     : text;
+}
+
+function startHeartbeat() {
+  setInterval(() => {
+    if (socket.connected) socket.emit("heartbeat");
+  }, 20000);
 }
