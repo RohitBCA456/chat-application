@@ -199,15 +199,19 @@ function handleLeaveRoom() {
 // In room.js
 function handleDeleteRoom() {
   if (confirm("Delete room and all messages? This cannot be undone.")) {
-    socket.emit("delete-room", roomId, (res) => {
-      if (res?.status === "success") {
-        alert("Room deleted successfully");
-        redirectToMainPage();
-      } else {
-        alert(`Failed to delete room: ${res?.message || "Unknown error"}`);
-        console.error("Delete room failed:", res);
-      }
-    });
+    fetch("https://chat-application-howg.onrender.com/room/deleteroom", {
+      method: "DELETE",
+      credentials: "include", 
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        alert(data.message);
+        if (data.message.includes("deleted")) redirectToMainPage();
+      })
+      .catch((err) => {
+        console.error("Delete failed", err);
+        alert("Something went wrong.");
+      });
   }
 }
 
