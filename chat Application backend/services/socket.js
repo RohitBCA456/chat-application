@@ -65,7 +65,10 @@ export const setupSocket = (server) => {
           .limit(100);
 
         const updatedSockets = await io.in(roomId).fetchSockets();
-        console.log(`📌 Room ${roomId} has ${updatedSockets.length} socket(s):`, updatedSockets.map(s => s.id));
+        console.log(
+          `📌 Room ${roomId} has ${updatedSockets.length} socket(s):`,
+          updatedSockets.map((s) => s.id)
+        );
 
         socket.emit("load-messages", messages);
         callback({ status: "success", messageCount: messages.length });
@@ -85,37 +88,43 @@ export const setupSocket = (server) => {
     socket.on("join-room", joinRoomHandler);
 
     // Send message
-    socket.on("send-message", async ({ content, roomId, username, tempId }, callback = () => {}) => {
-      try {
-        if (!content?.trim() || !roomId || !username) {
-          throw new Error("Invalid message data");
+    socket.on(
+      "send-message",
+      async ({ content, roomId, username, tempId }, callback = () => {}) => {
+        try {
+          if (!content?.trim() || !roomId || !username) {
+            throw new Error("Invalid message data");
+          }
+
+          const newMessage = new Message({
+            content: content.trim(),
+            roomId,
+            sender: username,
+          });
+          await newMessage.save();
+
+          const socketsInRoom = await io.in(roomId).fetchSockets();
+          console.log(
+            `📡 Emitting message to ${socketsInRoom.length} clients in ${roomId}:`,
+            socketsInRoom.map((s) => s.id)
+          );
+
+          io.to(roomId).emit("new-message", {
+            ...newMessage.toObject(),
+            tempId,
+          });
+
+          callback({
+            status: "delivered",
+            messageId: newMessage._id,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          console.error(`Send error for ${socket.id}:`, error.message);
+          callback({ status: "failed", message: error.message, tempId });
         }
-
-        const newMessage = new Message({
-          content: content.trim(),
-          roomId,
-          sender: username,
-        });
-        await newMessage.save();
-
-        const socketsInRoom = await io.in(roomId).fetchSockets();
-        console.log(`📡 Emitting message to ${socketsInRoom.length} clients in ${roomId}:`, socketsInRoom.map(s => s.id));
-
-        io.to(roomId).emit("new-message", {
-          ...newMessage.toObject(),
-          tempId,
-        });
-
-        callback({
-          status: "delivered",
-          messageId: newMessage._id,
-          timestamp: new Date(),
-        });
-      } catch (error) {
-        console.error(`Send error for ${socket.id}:`, error.message);
-        callback({ status: "failed", message: error.message, tempId });
       }
-    });
+    );
 
     // Inactivity timeout
     const connectionCheck = setInterval(() => {
@@ -125,6 +134,52 @@ export const setupSocket = (server) => {
         socket.disconnect();
       }
     }, 30000);
+
+    socket.on("leave-room", async (roomId, callback = () => {}) => {
+      try {
+        // Ensure socket is in the room
+        const inRoom = socket.rooms.has(roomId);
+        if (inRoom) {
+          await socket.leave(roomId);
+          console.log(`🚪 ${socket.id} left room ${roomId}`);
+        }
+
+        callback({ status: "success" });
+        socket.emit("leave-room-success");
+      } catch (err) {
+        console.error(`❌ Leave room error: ${err.message}`);
+        callback({ status: "error", message: err.message });
+      }
+    });
+
+    socket.on("delete-room", async (roomId, callback = () => {}) => {
+      try {
+        const room = await Room.findOne({ roomId });
+        if (!room) throw new Error("Room not found");
+
+        // Delete messages
+        await Message.deleteMany({ roomId });
+
+        // Delete room
+        await Room.deleteOne({ roomId });
+
+        console.log(`🗑️ Room ${roomId} deleted along with all messages`);
+
+        // Notify all clients in that room
+        io.to(roomId).emit("room-deleted");
+
+        // Disconnect all sockets from the room
+        const socketsInRoom = await io.in(roomId).fetchSockets();
+        for (const s of socketsInRoom) {
+          s.leave(roomId);
+        }
+
+        callback({ status: "success" });
+      } catch (err) {
+        console.error(`❌ Delete room error: ${err.message}`);
+        callback({ status: "error", message: err.message });
+      }
+    });
 
     socket.on("disconnect", (reason) => {
       clearInterval(connectionCheck);
