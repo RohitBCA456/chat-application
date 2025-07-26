@@ -103,5 +103,8 @@ async function fetchRooms() {
   }
 }
 
-// EventListener to listen on DomContentLoad
-window.addEventListener("DOMContentLoaded", fetchRooms);
+window.addEventListener("DOMContentLoaded", () => {
+  fetchRooms(); // initial load
+  setInterval(fetchRooms, 2000); // refresh every 2s
+});
+

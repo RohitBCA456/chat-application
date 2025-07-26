@@ -32,58 +32,6 @@ export const setupSocket = (server) => {
       if (conn) conn.lastActive = Date.now();
     });
 
-    // Delete room
-    // In socket.js
-    socket.on("delete-room", async (roomId, callback = () => {}) => {
-      const session = await mongoose.startSession();
-      session.startTransaction();
-
-      try {
-        // Verify room exists and user is creator
-        const room = await Room.findOne({ roomId }).session(session);
-        if (!room) {
-          throw new Error("Room not found");
-        }
-
-        // Get authenticated user data
-        const { username, userId } = socket.handshake.auth;
-
-        // Verify user is the room creator
-        if (room.creator.toString() !== userId) {
-          throw new Error("Only room creator can delete the room");
-        }
-
-        // Delete all messages in the room
-        await Message.deleteMany({ roomId }).session(session);
-
-        // Delete the room itself
-        await Room.deleteOne({ _id: room._id }).session(session);
-
-        // Notify all clients in the room
-        io.to(roomId).emit("room-deleted");
-
-        // Force all clients to leave the room
-        const socketsInRoom = await io.in(roomId).fetchSockets();
-        for (const s of socketsInRoom) {
-          s.leave(roomId);
-          s.emit("room-deleted");
-        }
-
-        await session.commitTransaction();
-        callback({ status: "success" });
-      } catch (error) {
-        await session.abortTransaction();
-        console.error(`Delete room error: ${error.message}`);
-        callback({
-          status: "error",
-          message: error.message,
-          roomId: roomId,
-        });
-      } finally {
-        session.endSession();
-      }
-    });
-
     // Join Room
     const joinRoomHandler = async (roomId, username, callback = () => {}) => {
       try {
