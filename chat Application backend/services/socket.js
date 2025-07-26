@@ -110,10 +110,17 @@ export const setupSocket = (server) => {
           });
           await newMessage.save();
 
+          // Debug: Who is in the room
+          const socketsInRoom = await io.in(roomId).fetchSockets();
+          console.log(
+            `📡 Emitting message to ${socketsInRoom.length} clients in room ${roomId}:`,
+            socketsInRoom.map((s) => s.id)
+          );
+
           // Broadcast to room including sender
           io.to(roomId).emit("new-message", {
             ...newMessage.toObject(),
-            tempId, // For client-side reconciliation
+            tempId, // Helps client reconcile
           });
 
           callback({
@@ -126,7 +133,7 @@ export const setupSocket = (server) => {
           callback({
             status: "failed",
             message: error.message,
-            tempId, // Return tempId for client to handle failed messages
+            tempId,
           });
         }
       }

@@ -7,6 +7,7 @@ const pendingMessages = new Map();
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let latestMessageId = null;
+let roomJoined = false; // NEW
 
 // Start backup polling
 function startBackupPolling(interval = 5000) {
@@ -109,6 +110,7 @@ function handleConnect() {
     socket.emit("join-room", roomId, currentUser.username, (response) => {
       if (response?.status === "success") {
         console.log("✅ Joined room");
+        roomJoined = true; // ✅ SET after successful join
         pendingMessages.clear();
       } else {
         setTimeout(() => joinRoomWithRetry(attempt + 1), 500 * attempt);
@@ -118,6 +120,7 @@ function handleConnect() {
 
   joinRoomWithRetry();
 }
+
 
 function handleDisconnect(reason) {
   console.log("Disconnected:", reason);
@@ -248,7 +251,7 @@ function handleDeleteRoom() {
 // ================= MESSAGE =================
 
 function sendMessage() {
-  if (!isSocketReady || !socket.connected) {
+  if (!isSocketReady || !socket.connected || !roomJoined) {
     showTemporaryMessage("Connecting... Please wait");
     return;
   }
@@ -288,7 +291,7 @@ function sendMessage() {
         pendingMessages.delete(tempId);
         showTemporaryMessage("Failed to send message.");
       } else {
-        // ✅ Fetch latest messages after successful server confirmation
+        // ✅ Fetch fresh messages to ensure sync
         await fetchLatestMessagesFromServer();
       }
     }
