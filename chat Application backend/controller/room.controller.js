@@ -1,8 +1,8 @@
 import { Room } from "../model/room.model.js";
 import { User } from "../model/user.model.js";
-import { Message } from "../model/message.model.js"; 
+import { Message } from "../model/message.model.js";
 
-export const deleteRoom = async (req, res) => {
+const deleteRoom = async (req, res) => {
   try {
     const userId = req.user?._id;
     if (!userId) {
@@ -25,13 +25,14 @@ export const deleteRoom = async (req, res) => {
     // Delete the room
     await Room.deleteOne({ _id: room._id });
 
-    return res.status(200).json({ message: "Room and messages deleted successfully." });
+    return res
+      .status(200)
+      .json({ message: "Room and messages deleted successfully." });
   } catch (error) {
     console.error("❌ Error deleting room:", error.message);
     return res.status(500).json({ message: "Error while deleting the room." });
   }
 };
-
 
 //get all rooms
 const getAllRooms = async (req, res) => {
