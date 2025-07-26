@@ -1,35 +1,37 @@
 import { Room } from "../model/room.model.js";
 import { User } from "../model/user.model.js";
+import { Message } from "../model/message.model.js"; 
 
-// deleteRoom controller
-const deleteRoom = async (req, res) => {
+export const deleteRoom = async (req, res) => {
   try {
     const userId = req.user?._id;
-    const user = await User.findById(userId); // get the user data from database through userId
-    console.log(user);
-    if (!user) {
-      return res
-        .status(404)
-        .json({ message: "User not found for deleting the room." });
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized user" });
     }
-    const userRoom = await Room.findOne({ username: user.username }); // find one room with the username
-    console.log(userRoom);
-    // Find the room and delete it
-    const room = await Room.findOneAndDelete({ _id: userRoom._id }); // delete the one room using the roomId
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const room = await Room.findOne({ username: user.username });
     if (!room) {
       return res.status(404).json({ message: "Room not found." });
     }
-    if (!user) {
-      return res
-        .status(404)
-        .json({ message: "Room deleted but not the username." });
-    }
 
-    return res.status(200).json({ message: "Room deleted." });
+    // Delete all messages for this room
+    await Message.deleteMany({ roomId: room.roomId });
+
+    // Delete the room
+    await Room.deleteOne({ _id: room._id });
+
+    return res.status(200).json({ message: "Room and messages deleted successfully." });
   } catch (error) {
+    console.error("❌ Error deleting room:", error.message);
     return res.status(500).json({ message: "Error while deleting the room." });
   }
 };
+
 
 //get all rooms
 const getAllRooms = async (req, res) => {

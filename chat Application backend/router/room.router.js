@@ -7,7 +7,7 @@ import { authMiddleware } from "../middleware/Auth.js";
 
 const router = Router();
 
-router.route("/deleteroom").get(authMiddleware, deleteRoom); // redirect to backend controller deleteRoom and before that authenticate the user
+router.route("/deleteroom").delete(authMiddleware, deleteRoom); // redirect to backend controller deleteRoom and before that authenticate the user
 router.route("/getallroom").get(getAllRooms); // redirect to getAllRooms backend controller to fetch all the rooms 
 
 //export the default router
