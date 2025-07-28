@@ -5,36 +5,41 @@ import { Message } from "../model/message.model.js";
 const deleteRoom = async (req, res) => {
   try {
     const userId = req.user?._id;
-    console.log(userId);
+    const { roomId } = req.params;
+
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized user" });
     }
 
     const user = await User.findById(userId);
-    console.log(user);
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
 
-    const room = await Room.findOne({ username: user.username });
+    const room = await Room.findOne({ roomId });
+
     if (!room) {
       return res.status(404).json({ message: "Room not found." });
     }
 
+    // Optional: Check if the user is the owner of the room (if needed)
+    // if (room.username !== user.username) {
+    //   return res.status(403).json({ message: "Access denied." });
+    // }
+
     // Delete all messages for this room
-    await Message.deleteMany({ roomId: room.roomId });
+    await Message.deleteMany({ roomId });
 
     // Delete the room
-    await Room.deleteOne({ _id: room._id });
+    await Room.deleteOne({ roomId });
 
-    return res
-      .status(200)
-      .json({ message: "Room and messages deleted successfully." });
+    return res.status(200).json({ message: "Room and messages deleted successfully." });
   } catch (error) {
     console.error("❌ Error deleting room:", error.message);
     return res.status(500).json({ message: "Error while deleting the room." });
   }
 };
+
 
 //get all rooms
 const getAllRooms = async (req, res) => {
